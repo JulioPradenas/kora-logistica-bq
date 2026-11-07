@@ -1,0 +1,1 @@
+Pendiente **Paso 9**: conectar data source BigQuery → dataset `gold_kora` (proyecto `kora-sports`).

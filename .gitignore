@@ -1,0 +1,26 @@
+# Credenciales y secretos — NUNCA en git
+.env
+*.json.key
+*-service-account*.json
+**/credentials/
+.gcloud/
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Datos locales opcionales (si generas fuera de data/raw trackeado)
+tmp/
+*.log

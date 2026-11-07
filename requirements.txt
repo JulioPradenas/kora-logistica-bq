@@ -1,0 +1,6 @@
+# Se instalará en Paso 5 al cargar bronze. Declarado ya para el esqueleto.
+google-cloud-bigquery>=3.25.0
+pandas>=2.2.0
+pyarrow>=15.0.0
+python-dotenv>=1.0.0
+
