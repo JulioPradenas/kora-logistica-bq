@@ -116,6 +116,40 @@ python scripts/build_gold.py
 
 ---
 
+## Decisiones y cómo defenderlas
+
+Tres gaps del storyboard Looker vs el contrato real. Respuestas cortas para entrevista.
+
+### 1) Funnel picking → despacho → entrega (sin columna `stage`)
+
+**Hecho:** no existe `stage_*` / `estado_proceso` en bronze/silver/gold.  
+**Decisión:** funnel **derivado** (`funnel_kind = shipment_e2e`) con columnas reales:
+
+| Etapa | Definición (columnas) | Conteo seed 42 |
+|---|---|---:|
+| picking | OUT WMS con `shipment_id` + `pick_start_ts` | **40 823** |
+| despacho | shipments en `f_entregas` (`ship_fecha_id` NOT NULL) | **29 803** |
+| entrega | `status ∈ {delivered, late_delivered}` | **21 325** |
+
+**Lógica de subconjunto (no es BPM perfecto):** entrega ⊆ despacho (21 325 ≤ 29 803). Picking (40 823) **no** es subconjunto de despacho: hay OUT con pick que no cruzan a TM (traslados, short-pick sin shipment TM, etc.). Por eso no se vende como conversión 100 % encadenada; se vende como funnel operativo derivado. Alternativa volume en la misma vista: `movement_type` / `status`.
+
+### 2) Comuna sin `d_comuna_destino`
+
+**Hecho:** levantamiento §7 nombra la dim; `ddl_gold` **no** la materializa. Sí hay `comuna_id` / `comuna_name` NOT NULL en `f_entregas`.  
+**Decisión:** tratar comuna como **dim degenerada** (atributos desnormalizados en el fact). Suficiente para filtros/drill Looker. No inventar `d_comuna_destino` sin maestro de origen ni SCD.
+
+### 3) SKU en drill de entregas
+
+**Hecho:** `f_entregas` no trae `sku_id`.  
+**Decisión:** bridge OUT WMS por `shipment_id` → grano **shipment × sku** (fan-out si el shipment tiene varios SKU).  
+**Mitigación fan-out en Looker:** métricas de shipment con `COUNT(DISTINCT shipment_id)` / `COUNT_DISTINCT`; no sumar `qty_delivered` a ciegas al cortar por SKU (se repetiría por línea). Para qty a nivel SKU usar `qty_out` del bridge WMS.
+
+### Narrativa de migración (solo lab)
+
+En un cutover tipificado el linaje sería **SAP B1 (o export ops) → CSV contrato → BigQuery** medallón bronze→silver→gold, y Looker solo sobre gold. Este repo **simula** ese camino con CSV sintético SAP-like y el mismo contrato de columnas; no hay conexión SAP real ni claims de empleador. Si en producción faltara una etapa de proceso o una dim, se documenta el proxy (timestamps/status, degenerate dim, bridge) en vez de fabricar el campo en gold.
+
+---
+
 ## Límites
 
 - Sin billing → table expiration ~60d en sandbox.

@@ -121,4 +121,4 @@ Usar `v_stock_salud`: `is_stockout`, `doh_7d`, `is_overstock` (heurística lab; 
 | `v_funnel_logistico` | Conversión picking→despacho→entrega (derivada) |
 | `v_entregas_drill` | Corte por comuna, SKU, transportista |
 
-Detalle de gaps de schema y asunciones: [`docs/paso-09-looker.md`](../docs/paso-09-looker.md).
+Detalle de gaps de schema y asunciones: [`docs/paso-09-looker.md`](../docs/paso-09-looker.md) — ver sección **Decisiones y cómo defenderlas**.
