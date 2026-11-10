@@ -119,32 +119,55 @@ def test_types_and_non_empty(frames: dict[str, pd.DataFrame]) -> None:
     stk = frames["sap_wms_stock_snapshot.csv"]
     ent = frames["sap_tm_entregas.csv"]
 
+    # Bronze con anomalías Paso 6 (seed 42): 8/250/12/60285/208555/29923
     assert len(bodega) == 8
     assert len(sku) == 250
     assert len(carrier) == 12
-    assert len(mov) >= 30_000
-    assert len(ent) >= 10_000
+    assert len(mov) == 60_285
+    assert len(ent) == 29_923
+    assert len(stk) == 208_555
     assert len(stk) > len(mov)
 
     assert pd.api.types.is_integer_dtype(sku["unit_cost_clp"]) or sku["unit_cost_clp"].astype(int).notna().all()
-    assert pd.to_numeric(mov["qty"], errors="raise").notna().all()
-    assert pd.to_numeric(stk["on_hand_qty"], errors="raise").notna().all()
-    assert pd.to_numeric(stk["reserved_qty"], errors="raise").notna().all()
-    assert pd.to_numeric(ent["qty_delivered"], errors="raise").notna().all()
+    # qty puede ser numérico; null-required anomalies usan movement_id nuevos con qty heredado.
+    assert pd.to_numeric(mov["qty"], errors="coerce").notna().all()
+    assert pd.to_numeric(stk["on_hand_qty"], errors="coerce").notna().all()
+    assert pd.to_numeric(stk["reserved_qty"], errors="coerce").notna().all()
+    assert pd.to_numeric(ent["qty_delivered"], errors="coerce").notna().all()
 
 
 def test_key_uniqueness(frames: dict[str, pd.DataFrame]) -> None:
+    """Maestros únicos; hechos tienen dupes documentados (Paso 6)."""
     assert frames["md_bodega.csv"]["warehouse_id"].is_unique
     assert frames["md_sku.csv"]["sku_id"].is_unique
     assert frames["md_transportista.csv"]["carrier_id"].is_unique
-    assert frames["sap_wms_movimientos.csv"]["movement_id"].is_unique
-    assert frames["sap_tm_entregas.csv"]["shipment_id"].is_unique
+
+    mov = frames["sap_wms_movimientos.csv"]
+    # exact(50)+key(40) extras → 90 filas con movement_id duplicado (50+40 keys touched).
+    mov_dupe_rows = int(mov["movement_id"].duplicated(keep=False).sum())
+    assert mov_dupe_rows >= 90
+
+    ent = frames["sap_tm_entregas.csv"]
+    ent_dupe_rows = int(ent["shipment_id"].duplicated(keep=False).sum())
+    assert ent_dupe_rows >= 70
 
     stk = frames["sap_wms_stock_snapshot.csv"]
-    assert not stk.duplicated(subset=["snapshot_date", "warehouse_id", "sku_id"]).any()
+    stk_dupe_mask = stk.duplicated(
+        subset=["snapshot_date", "warehouse_id", "sku_id"], keep=False
+    )
+    assert int(stk_dupe_mask.sum()) >= 80
 
 
 def test_referential_integrity(frames: dict[str, pd.DataFrame]) -> None:
+    """Núcleo limpio respeta FKs; anomalías Paso 6 inyectan FK rotas documentadas."""
+    import importlib.util
+
+    gen_path = ROOT / "scripts" / "generate_synthetic.py"
+    spec = importlib.util.spec_from_file_location("generate_synthetic", gen_path)
+    assert spec and spec.loader
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+
     wh = set(frames["md_bodega.csv"]["warehouse_id"])
     skus = set(frames["md_sku.csv"]["sku_id"])
     carriers = set(frames["md_transportista.csv"]["carrier_id"])
@@ -153,19 +176,54 @@ def test_referential_integrity(frames: dict[str, pd.DataFrame]) -> None:
     stk = frames["sap_wms_stock_snapshot.csv"]
     ent = frames["sap_tm_entregas.csv"]
 
-    assert set(mov["warehouse_id"]).issubset(wh)
-    assert set(mov["sku_id"]).issubset(skus)
-    assert set(stk["warehouse_id"]).issubset(wh)
-    assert set(stk["sku_id"]).issubset(skus)
-    assert set(ent["warehouse_id"]).issubset(wh)
-    assert set(ent["carrier_id"]).issubset(carriers)
+    assert gen.ANOMALY_WH in set(mov["warehouse_id"])
+    assert gen.ANOMALY_SKU in set(mov["sku_id"])
+    assert gen.ANOMALY_SKU in set(stk["sku_id"])
+    assert gen.ANOMALY_CARRIER in set(ent["carrier_id"])
+    assert gen.ANOMALY_WH in set(ent["warehouse_id"])
 
-    # Each delivery refs an existing shipment/order on an OUT movement
+    # Conteos exactos de FK rotas
+    assert (mov["warehouse_id"] == gen.ANOMALY_WH).sum() == gen.ANOMALY_COUNTS[
+        "missing_fk_warehouse_movimientos"
+    ]
+    assert (mov["sku_id"] == gen.ANOMALY_SKU).sum() == gen.ANOMALY_COUNTS[
+        "missing_fk_sku_movimientos"
+    ]
+    assert (stk["sku_id"] == gen.ANOMALY_SKU).sum() == gen.ANOMALY_COUNTS[
+        "missing_fk_sku_stock"
+    ]
+    assert (ent["carrier_id"] == gen.ANOMALY_CARRIER).sum() == gen.ANOMALY_COUNTS[
+        "missing_fk_carrier_entregas"
+    ]
+    assert (ent["warehouse_id"] == gen.ANOMALY_WH).sum() == gen.ANOMALY_COUNTS[
+        "missing_fk_warehouse_entregas"
+    ]
+
+    # Intersección shipment/order del núcleo (excluye SHP-FK* / SHP-NULL*)
+    core_ent = ent[~ent["shipment_id"].astype(str).str.startswith(("SHP-FK", "SHP-NULL"))]
     mov_ships = set(mov.loc[mov["shipment_id"].astype(str).str.len() > 0, "shipment_id"])
     mov_orders = set(mov.loc[mov["order_id"].astype(str).str.len() > 0, "order_id"])
-    assert set(ent["shipment_id"]).issubset(mov_ships)
-    assert set(ent["order_id"]).issubset(mov_orders)
-    assert len(set(ent["shipment_id"]) & mov_ships) > 1000
+    assert set(core_ent["shipment_id"]).issubset(mov_ships)
+    assert set(core_ent["order_id"]).issubset(mov_orders)
+    assert len(set(core_ent["shipment_id"]) & mov_ships) > 1000
+
+    # Núcleo (sin anomalías) respeta FKs a maestros
+    core_mov = mov[~mov["movement_id"].astype(str).str.startswith(("MOV-FK", "MOV-NULL"))]
+    core_stk = stk[
+        (stk["sku_id"] != gen.ANOMALY_SKU)
+        & (stk["sku_id"].astype(str).str.startswith("SKU-NULL") == False)  # noqa: E712
+        & (stk["warehouse_id"].astype(str).str.len() > 0)
+        & (stk["snapshot_date"].astype(str).str.len() > 0)
+    ]
+    assert set(core_mov["warehouse_id"]).issubset(wh)
+    assert set(core_mov["sku_id"]).issubset(skus)
+    assert set(core_stk["warehouse_id"]).issubset(wh)
+    assert set(core_stk["sku_id"]).issubset(skus)
+    core_ent_fk = ent[
+        ~ent["shipment_id"].astype(str).str.startswith(("SHP-FK", "SHP-NULL"))
+    ]
+    assert set(core_ent_fk["warehouse_id"]).issubset(wh)
+    assert set(core_ent_fk["carrier_id"]).issubset(carriers)
 
 
 def test_no_negative_stock(frames: dict[str, pd.DataFrame]) -> None:
@@ -186,20 +244,79 @@ def test_coherent_date_ranges(frames: dict[str, pd.DataFrame]) -> None:
     stk = frames["sap_wms_stock_snapshot.csv"]
     ent = frames["sap_tm_entregas.csv"]
 
-    mov_dates = pd.to_datetime(mov["event_date"])
-    stk_dates = pd.to_datetime(stk["snapshot_date"])
+    # Excluir filas con fechas vacías (anomalías null_required Paso 6).
+    mov_dates = pd.to_datetime(mov.loc[mov["event_date"].astype(str).str.len() > 0, "event_date"])
+    stk_dates = pd.to_datetime(
+        stk.loc[stk["snapshot_date"].astype(str).str.len() > 0, "snapshot_date"]
+    )
     ship_dates = pd.to_datetime(ent["ship_date"])
-    deliv_dates = pd.to_datetime(ent["delivery_date"])
+    deliv_ok = ent["delivery_date"].astype(str).str.len() > 0
+    deliv_dates = pd.to_datetime(ent.loc[deliv_ok, "delivery_date"])
+    ship_for_deliv = pd.to_datetime(ent.loc[deliv_ok, "ship_date"])
 
     assert mov_dates.min().date() == DEFAULT_HORIZON_START
     assert mov_dates.max().date() == DEFAULT_HORIZON_END
     span_days = (mov_dates.max() - mov_dates.min()).days
     assert span_days >= 365, f"horizon too short: {span_days} days"
     assert stk_dates.min() >= mov_dates.min()
+    # missing_fk_sku_stock usa fechas 2025-06-* dentro del horizonte
     assert stk_dates.max() <= mov_dates.max()
-    assert (deliv_dates >= ship_dates).all()
+    assert (deliv_dates >= ship_for_deliv).all()
     # deliveries should not start before movement horizon
     assert ship_dates.min() >= mov_dates.min()
+
+
+def test_documented_anomalies_exact_counts(frames: dict[str, pd.DataFrame]) -> None:
+    """ANOMALY_COUNTS (seed 42) se materializan exactamente en los CSV."""
+    import importlib.util
+
+    gen_path = ROOT / "scripts" / "generate_synthetic.py"
+    spec = importlib.util.spec_from_file_location("generate_synthetic", gen_path)
+    assert spec and spec.loader
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+
+    mov = frames["sap_wms_movimientos.csv"]
+    stk = frames["sap_wms_stock_snapshot.csv"]
+    ent = frames["sap_tm_entregas.csv"]
+    c = gen.ANOMALY_COUNTS
+
+    assert len(mov) == 60_120 + (
+        c["exact_dupes_movimientos"]
+        + c["key_dupes_movimientos"]
+        + c["missing_fk_warehouse_movimientos"]
+        + c["missing_fk_sku_movimientos"]
+        + c["null_required_movimientos"]
+    )
+    assert len(stk) == 208_440 + (
+        c["exact_dupes_stock"]
+        + c["key_dupes_stock"]
+        + c["missing_fk_sku_stock"]
+        + c["null_required_stock"]
+    )
+    assert len(ent) == 29_803 + (
+        c["exact_dupes_entregas"]
+        + c["key_dupes_entregas"]
+        + c["missing_fk_carrier_entregas"]
+        + c["missing_fk_warehouse_entregas"]
+        + c["null_required_entregas"]
+    )
+
+    # Null required: fechas/keys vacías
+    assert ((mov["event_date"].astype(str) == "") | (mov["warehouse_id"].astype(str) == "")).sum() == c[
+        "null_required_movimientos"
+    ]
+    assert (
+        (stk["snapshot_date"].astype(str) == "") | (stk["warehouse_id"].astype(str) == "")
+    ).sum() == c["null_required_stock"]
+    assert (
+        (ent["delivery_date"].astype(str) == "") | (ent["order_id"].astype(str) == "")
+    ).sum() == c["null_required_entregas"]
+
+    # Status casing: variantes no canónicas exactas (in-place)
+    canonical = {"delivered", "late_delivered", "failed", "in_transit"}
+    non_canon = ent[~ent["status"].isin(canonical)]
+    assert len(non_canon) == c["status_casing_entregas"]
 
 
 def test_seed_determinism(generated_raw: Path) -> None:

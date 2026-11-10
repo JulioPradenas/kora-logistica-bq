@@ -21,7 +21,7 @@ endif
 
 # ---------------------------------------------------------------------------
 # STAGES — ÚNICO lugar extensible (orden = pipeline).
-# datasets (Paso 3) → DDL vacío (Paso 4) → CSV sintéticos → load bronze (Paso 5).
+# datasets → DDL → CSV sintéticos → load bronze → transform silver (Paso 6).
 #
 # generate_synthetic: SIEMPRE (no if-missing). Justificación:
 #   - data/raw/*.csv está en .gitignore → no hay artefacto versionado.
@@ -32,12 +32,13 @@ STAGES := \
 	scripts/setup_bigquery.py \
 	scripts/apply_ddl.py \
 	scripts/generate_synthetic.py \
-	scripts/load_bronze.py
-#	scripts/transform_silver.py \
+	scripts/load_bronze.py \
+	scripts/transform_silver.py
 #	scripts/build_gold.py
 
 # Tablas bronze para verify de conteos (orden = load_bronze.BRONZE_TABLES).
 BRONZE_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
+SILVER_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
 
 .PHONY: help setup test run
 
@@ -79,16 +80,24 @@ run: setup
 	  echo "==> verify skipped (DRY=1)"; \
 	  echo "summary: stages=$$n mode=dry-only project=$(GCP_PROJECT) OK"; \
 	else \
-	  echo "==> verify: bq ls datasets + bronze num_rows + schema gold fact"; \
+	  echo "==> verify: bq ls datasets + bronze/silver counts + quarantine by reason"; \
 	  bq ls --project_id=$(GCP_PROJECT); \
 	  bq ls --project_id=$(GCP_PROJECT) bronze_kora; \
 	  bq ls --project_id=$(GCP_PROJECT) silver_kora; \
 	  bq ls --project_id=$(GCP_PROJECT) gold_kora; \
-	  echo "==> bronze_kora row counts (expect 8/250/12/60120/208440/29803)"; \
+	  echo "==> bronze_kora row counts (expect 8/250/12/60285/208555/29923)"; \
 	  for t in $(BRONZE_TABLES); do \
 	    bq show --format=prettyjson $(GCP_PROJECT):bronze_kora.$$t \
 	      | $(PY) -c "import json,sys; d=json.load(sys.stdin); print(f\"  bronze_kora.$$t  num_rows={d.get('numRows')}\")"; \
 	  done; \
+	  echo "==> silver_kora row counts (expect 8/250/12/60120/208440/29803)"; \
+	  for t in $(SILVER_TABLES); do \
+	    bq show --format=prettyjson $(GCP_PROJECT):silver_kora.$$t \
+	      | $(PY) -c "import json,sys; d=json.load(sys.stdin); print(f\"  silver_kora.$$t  num_rows={d.get('numRows')}\")"; \
+	  done; \
+	  echo "==> quarantine_rows by reason"; \
+	  bq query --project_id=$(GCP_PROJECT) --use_legacy_sql=false --format=pretty \
+	    "SELECT reason, COUNT(*) AS n FROM \`$(GCP_PROJECT).silver_kora.quarantine_rows\` GROUP BY reason ORDER BY reason"; \
 	  bq show --schema --format=prettyjson $(GCP_PROJECT):gold_kora.f_movimientos_bodega; \
 	  echo ""; \
 	  echo "summary: stages=$$n mode=apply+verify project=$(GCP_PROJECT) OK"; \

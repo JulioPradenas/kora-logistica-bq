@@ -48,9 +48,9 @@ def test_csv_to_table_map(load_bronze, tmp_path: Path):
         "md_bodega": 8,
         "md_sku": 250,
         "md_transportista": 12,
-        "sap_wms_movimientos": 60_120,
-        "sap_wms_stock_snapshot": 208_440,
-        "sap_tm_entregas": 29_803,
+        "sap_wms_movimientos": 60_285,
+        "sap_wms_stock_snapshot": 208_555,
+        "sap_tm_entregas": 29_923,
     }
 
 
@@ -92,6 +92,30 @@ def test_build_load_job_config_explicit_no_autodetect(load_bronze):
     assert cfg.autodetect is False
     assert cfg.source_format == bigquery.SourceFormat.CSV
     assert [f.name for f in cfg.schema] == ["warehouse_id", "warehouse_name"]
+
+
+def test_load_schema_forces_nullable_never_required(load_bronze):
+    """
+    Regresión Julio make run: load con schema REQUIRED rechaza anomalías null
+    ('Required column value is missing'). El job debe forzar NULLABLE.
+    """
+    from google.cloud import bigquery
+
+    required_schema = [
+        bigquery.SchemaField("event_date", "DATE", mode="REQUIRED"),
+        bigquery.SchemaField("warehouse_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("qty", "INT64", mode="REQUIRED"),
+    ]
+    # Falla el contrato si alguien vuelve a pasar schema REQUIRED sin coerce.
+    assert any(f.mode == "REQUIRED" for f in required_schema)
+
+    nullable = load_bronze.schema_as_nullable(required_schema)
+    assert all(f.mode == "NULLABLE" for f in nullable)
+    assert [f.name for f in nullable] == ["event_date", "warehouse_id", "qty"]
+
+    cfg = load_bronze.build_load_job_config(required_schema)
+    assert all(f.mode == "NULLABLE" for f in cfg.schema)
+    assert not any(str(f.mode).upper() == "REQUIRED" for f in cfg.schema)
 
 
 def test_verify_row_count_pass_fail(load_bronze):
@@ -225,7 +249,7 @@ def test_run_dry_run_propagates_missing(load_bronze, tmp_path: Path):
 
 
 def test_makefile_n_run_includes_new_stages():
-    """`make -n run` debe planificar generate + load (CI step)."""
+    """`make -n run` debe planificar generate + load + transform_silver (CI)."""
     proc = subprocess.run(
         ["make", "-n", "run"],
         cwd=ROOT,
@@ -238,6 +262,7 @@ def test_makefile_n_run_includes_new_stages():
     # make -n deja `$script` sin expandir; STAGES aparece en el `for`.
     assert "scripts/generate_synthetic.py" in out
     assert "scripts/load_bronze.py" in out
+    assert "scripts/transform_silver.py" in out
     assert "$script --dry-run" in out or "--dry-run" in out
     # Sigue incluyendo etapas previas.
     assert "scripts/setup_bigquery.py" in out
@@ -247,12 +272,14 @@ def test_makefile_n_run_includes_new_stages():
     idx_ddl = out.index("scripts/apply_ddl.py")
     idx_gen = out.index("scripts/generate_synthetic.py")
     idx_load = out.index("scripts/load_bronze.py")
-    assert idx_setup < idx_ddl < idx_gen < idx_load
+    idx_silver = out.index("scripts/transform_silver.py")
+    assert idx_setup < idx_ddl < idx_gen < idx_load < idx_silver
 
 
 def test_makefile_stages_comment_justifies_always_generate():
     text = MAKEFILE.read_text(encoding="utf-8")
     assert "scripts/generate_synthetic.py" in text
     assert "scripts/load_bronze.py" in text
+    assert "scripts/transform_silver.py" in text
     assert "SIEMPRE" in text or "always" in text.lower()
     assert ".gitignore" in text or "gitignored" in text.lower() or "gitignore" in text

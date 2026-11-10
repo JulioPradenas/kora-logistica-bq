@@ -33,7 +33,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Datasets BQ medallón (`bronze`/`silver`/`gold`) | ✅ — `southamerica-west1` |
 | DDL vacío (shapes + star; integer-range) | ✅ — sin carga |
 | Carga bronze (CSV → load jobs) | ✅ — `WRITE_TRUNCATE` |
-| Transforms silver + quarantine | ⏳ |
+| Transforms silver + quarantine | ✅ — CTAS + `quarantine_rows` |
 | Demo partition/cluster (bytes) | ⏳ |
 | Looker Studio + one-page | ⏳ |
 
@@ -50,12 +50,12 @@ make run DRY=1                          # solo dry-run de cada etapa (sin writes
 make test                               # pytest (mocks; sin GCP)
 ```
 
-`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL → **generate CSV (siempre)** → **load bronze**; futuro: transforms = una línea nueva). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + **conteos bronze** + `bq show --schema` de un fact gold + summary.  
+`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL → **generate CSV (siempre)** → **load bronze** → **transform silver**). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + **conteos bronze/silver** + **quarantine by reason** + `bq show --schema` de un fact gold + summary.  
 `GCP_PROJECT` se lee de `.env` (default `kora-sports`); el Makefile no imprime secretos ni SA keys.
 
-`data/raw/*.csv` está gitignored → `make run` regenera siempre con seed 42 (determinista) antes del load.
+`data/raw/*.csv` está gitignored → `make run` regenera siempre con seed 42 (determinista; + anomalías Paso 6) antes del load.
 
-Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md).  
+Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md) · [docs/paso-06-silver.md](docs/paso-06-silver.md).  
 CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
 
 ## Docs
@@ -65,7 +65,8 @@ CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/
 - [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
 - [Paso 4 — DDL vacío medallón](docs/paso-04-ddl.md)
 - [Paso 5 — carga bronze (load jobs)](docs/paso-05-load-bronze.md)
-- Transforms silver/gold y demo de bytes: TBD en pasos siguientes
+- [Paso 6 — transform silver + quarantine](docs/paso-06-silver.md)
+- Gold / demo de bytes: TBD en pasos siguientes
 
 ## Disclaimer
 

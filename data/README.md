@@ -8,16 +8,20 @@ Proyecto GCP destino (Pasos 3+): `kora-sports`
 
 ## Archivos en `raw/`
 
-| Archivo | Origen simulado | Filas objetivo | PK lógica |
+| Archivo | Origen simulado | Filas objetivo (seed 42) | PK lógica |
 |---|---|---|---|
-| `md_bodega.csv` | Maestro WMS | 8 | `warehouse_id` |
-| `md_sku.csv` | Maestro materiales | 250 | `sku_id` |
-| `md_transportista.csv` | Maestro TM / 3PL | 12 | `carrier_id` |
-| `sap_wms_movimientos.csv` | Export WMS movimientos | **≥30k** (typ. 50–70k) | `movement_id` |
-| `sap_wms_stock_snapshot.csv` | Snapshot stock diario | ~assortment×días | (`snapshot_date`,`warehouse_id`,`sku_id`) |
-| `sap_tm_entregas.csv` | Export transporte | ~25–40k | `shipment_id` |
+| `md_bodega.csv` | Maestro WMS | **8** | `warehouse_id` |
+| `md_sku.csv` | Maestro materiales | **250** | `sku_id` |
+| `md_transportista.csv` | Maestro TM / 3PL | **12** | `carrier_id` |
+| `sap_wms_movimientos.csv` | Export WMS movimientos | **60 285** (núcleo 60 120 + anomalías) | `movement_id` |
+| `sap_wms_stock_snapshot.csv` | Snapshot stock diario | **208 555** (núcleo 208 440 + anomalías) | (`snapshot_date`,`warehouse_id`,`sku_id`) |
+| `sap_tm_entregas.csv` | Export transporte | **29 923** (núcleo 29 803 + anomalías) | `shipment_id` |
+
+Resumen bronze seed 42: **8 / 250 / 12 / 60285 / 208555 / 29923**.
 
 Encoding: UTF-8. Separador: `,`. Header en fila 1. Fechas: `YYYY-MM-DD`. Timestamps: `YYYY-MM-DD HH:MM:SS` (naive, calendario Chile).
+
+**Landing bronze = NULLABLE** (Paso 6): vacíos/nulls de anomalías deben poder cargar; la estrictitud (NOT NULL / FK / canónicos) vive en **silver + quarantine**. Tablas bronze ya creadas con REQUIRED se relajan en `apply_ddl` (`ALTER … DROP NOT NULL`).
 
 Los CSV **no** se versionan en git (`data/raw/*.csv` en `.gitignore`). Regenerar con el comando de arriba; `data/raw/.gitkeep` mantiene la carpeta.
 
@@ -118,12 +122,34 @@ sap_wms_movimientos.order_id     =  sap_tm_entregas.order_id
 
 Sin estos puentes no hay cycle time picking→door ni “¿el late viene de bodega?”.
 
+## Anomalías documentadas (Paso 6 — seed 42)
+
+Tras el núcleo limpio, `inject_anomalies` añade un presupuesto **fijo** (decenas–cientos) que emula basura típica de exports SAP B1 / CSV ops. Determinista (`random.Random(42)` dedicado). Status casing **muta in-place** (no suma filas).
+
+| Anomalía | Entidad | Conteos | Destino silver |
+|---|---|---:|---|
+| Exact duplicates | movimientos / stock / entregas | 50 / 50 / 40 | 1→silver; extras = **eliminated_dupes** |
+| Key duplicates (misma PK, payload distinto) | movimientos / stock / entregas | 40 / 30 / 30 | idem (ROW_NUMBER) |
+| Missing FK warehouse | movimientos / entregas | 30 / 15 | **quarantine** `missing_fk_warehouse` |
+| Missing FK sku | movimientos / stock | 25 / 25 | **quarantine** `missing_fk_sku` |
+| Missing FK carrier | entregas | 20 | **quarantine** `missing_fk_carrier` |
+| Null required date/key | movimientos / stock / entregas | 20 / 10 / 15 | **quarantine** `null_required_*` |
+| Status casing / whitespace | entregas | 80 (in-place) | **normalize** (UPPER/TRIM + map); no drop |
+
+IDs rotos fijos: `WH-99`, `SKU-99999`, `CAR-99`.
+
+**Ecuación de reconciliación (Paso 6):**  
+`bronze = silver + quarantine + eliminated_dupes`  
+(status casing no aparece en quarantine ni en eliminated).
+
+Constantes: `ANOMALY_COUNTS` en `scripts/generate_synthetic.py`.
+
 ## Calidad esperada post-generación
 
-- [ ] `sap_wms_movimientos` ≥ 30 000 filas
+- [ ] `sap_wms_movimientos` ≥ 30 000 filas (núcleo limpio; bronze total 60 285 con anomalías)
 - [ ] Horizonte fijo por defecto: `event_date` min=`2025-04-01`, max=`2026-10-31` (≥ 12 meses)
-- [ ] Todos los `warehouse_id` / `sku_id` / `carrier_id` de hechos existen en maestros (salvo quarantine futura)
-- [ ] Intersección de `shipment_id` movimientos∩entregas > 0
+- [ ] FKs del **núcleo** OK; anomalías documentadas rompen FK / null / dupes a propósito
+- [ ] Intersección de `shipment_id` movimientos∩entregas (núcleo) > 0
 - [ ] Re-run con seed 42 (+ mismo `HORIZON_END`) produce **mismos bytes/conteos**, independiente del día de ejecución
 
 ## Extracción: CSV plano vs SAP Business One (nota de diseño)

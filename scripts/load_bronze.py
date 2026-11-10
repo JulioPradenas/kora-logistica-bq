@@ -16,6 +16,8 @@ Location: southamerica-west1 (fija; misma de datasets/DDL).
 Sandbox:
   - Load jobs OK; sin DML (no INSERT/UPDATE/DELETE/MERGE).
   - WRITE_TRUNCATE sobre tablas ya creadas (Paso 4) reemplaza filas.
+  - Paso 6: schema de load se fuerza a NULLABLE + ALLOW_FIELD_RELAXATION
+    (landing permisivo; anomalías null deben entrar a bronze → quarantine silver).
   - Bronze de este lab no está particionado; en tablas particionadas/clustered,
     un load WRITE_TRUNCATE a tabla existente borra datos y escribe de nuevo
     sin DROP TABLE (definición de partición/clustering permanece en el objeto).
@@ -49,14 +51,15 @@ BRONZE_TABLES: tuple[str, ...] = (
     "sap_tm_entregas",
 )
 
-# Conteos esperados con seed 42 + horizonte fijo (2025-04-01 → 2026-10-31).
+# Conteos esperados con seed 42 + horizonte fijo + anomalías Paso 6.
+# Núcleo limpio 60120/208440/29803 + extras documentados (data/README.md).
 EXPECTED_COUNTS: dict[str, int] = {
     "md_bodega": 8,
     "md_sku": 250,
     "md_transportista": 12,
-    "sap_wms_movimientos": 60_120,
-    "sap_wms_stock_snapshot": 208_440,
-    "sap_tm_entregas": 29_803,
+    "sap_wms_movimientos": 60_285,
+    "sap_wms_stock_snapshot": 208_555,
+    "sap_tm_entregas": 29_923,
 }
 
 
@@ -148,15 +151,43 @@ def validate_csv_against_table(
     return header, rows
 
 
+def schema_as_nullable(schema) -> list:
+    """
+    Copia el schema de la tabla con mode=NULLABLE en todos los campos.
+    Landing bronze permisivo: nulls/vacíos de anomalías deben cargar;
+    la estrictitud vive en silver + quarantine (Paso 6).
+    """
+    from google.cloud import bigquery
+
+    out: list = []
+    for field in schema:
+        # SchemaField es inmutable en la práctica; reconstruir.
+        out.append(
+            bigquery.SchemaField(
+                name=field.name,
+                field_type=field.field_type,
+                mode="NULLABLE",
+                description=getattr(field, "description", None),
+            )
+        )
+    return out
+
+
 def build_load_job_config(schema):
     """
-    LoadJobConfig: schema explícito (tabla existente), WRITE_TRUNCATE,
+    LoadJobConfig: schema explícito NULLABLE, WRITE_TRUNCATE,
     skip_leading_rows=1, sin autodetect.
+
+    Nullability de tablas ya creadas la relaja `apply_ddl` (ALTER DROP NOT NULL)
+    antes del load en STAGES. Aquí forzamos schema NULLABLE para no re-imponer
+    REQUIRED desde un get_table stale. No usamos ALLOW_FIELD_RELAXATION:
+    en tablas bronze no particionadas + WRITE_TRUNCATE BQ no lo aplica de forma
+    fiable; el ALTER previo es la vía idempotente correcta.
     """
     from google.cloud import bigquery
 
     return bigquery.LoadJobConfig(
-        schema=list(schema),
+        schema=schema_as_nullable(schema),
         source_format=bigquery.SourceFormat.CSV,
         skip_leading_rows=1,
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,

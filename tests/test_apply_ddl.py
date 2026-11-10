@@ -6,6 +6,7 @@ CI debe pasar sin ADC ni project real.
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -59,6 +60,19 @@ def test_bronze_columns_match_data_contract(apply_ddl):
         assert parsed[table] == expected, f"mismatch in {table}"
 
 
+def test_bronze_ddl_landing_has_no_not_null(apply_ddl):
+    """
+    Regresión Paso 6: bronze debe ser landing NULLABLE.
+    Si alguien reintroduce NOT NULL, load de anomalías null falla
+    ('Required column value is missing').
+    """
+    sql = (SQL_DIR / "ddl_bronze.sql").read_text(encoding="utf-8")
+    assert apply_ddl.bronze_ddl_has_not_null(sql) is False
+    # Heurística directa sobre cuerpo sin comentarios.
+    body = re.sub(r"--.*?$", "", sql, flags=re.MULTILINE)
+    assert not re.search(r"\bNOT\s+NULL\b", body, flags=re.IGNORECASE)
+
+
 def test_gold_facts_integer_range_and_clustering(apply_ddl):
     sql = (SQL_DIR / "ddl_gold.sql").read_text(encoding="utf-8")
     info = apply_ddl.gold_fact_partition_cluster(sql)
@@ -78,12 +92,14 @@ def test_gold_facts_integer_range_and_clustering(apply_ddl):
 
 def test_load_all_statements_counts(apply_ddl):
     specs = apply_ddl.load_all_statements(SQL_DIR)
-    # 6 bronze + 6 silver + 4 dims + 3 facts = 19
-    assert len(specs) == 19
+    # 6 bronze + 7 silver (incl. quarantine_rows) + 4 dims + 3 facts = 20
+    assert len(specs) == 20
     layers = {s.layer for s in specs}
     assert layers == {"bronze", "silver", "gold"}
     bronze = [s for s in specs if s.layer == "bronze"]
     assert {s.table_fqn.split(".")[-1] for s in bronze} == set(apply_ddl.BRONZE_CONTRACT)
+    silver_tables = {s.table_fqn.split(".")[-1] for s in specs if s.layer == "silver"}
+    assert "quarantine_rows" in silver_tables
 
 
 def test_all_statements_are_create_if_not_exists(apply_ddl):
@@ -197,10 +213,67 @@ def test_run_apply_all_missing(apply_ddl, capsys):
 
     rc = apply_ddl.run(dry_run=False, project_id="kora-sports", client=client)
     assert rc == 0
-    assert client.query.call_count == 19
+    # 20 CREATE; relax ve tablas missing → sin ALTER queries extra
+    assert client.query.call_count == 20
     out = capsys.readouterr().out
     assert "OK:" in out
     assert "created" in out
+    assert "relax bronze nullability" in out
+
+
+def test_relax_bronze_nullability_alters_required(apply_ddl):
+    """Tablas ya creadas con REQUIRED → ALTER DROP NOT NULL (idempotente)."""
+    client = MagicMock()
+
+    def field(name: str, mode: str = "REQUIRED"):
+        f = MagicMock()
+        f.name = name
+        f.mode = mode
+        return f
+
+    table = MagicMock()
+    table.schema = [
+        field("event_date", "REQUIRED"),
+        field("warehouse_id", "REQUIRED"),
+        field("qty_ordered", "NULLABLE"),
+    ]
+    client.get_table.return_value = table
+    job = MagicMock()
+    client.query.return_value = job
+
+    results = apply_ddl.relax_bronze_nullability(
+        client,
+        project_id="kora-sports",
+        dry_run=False,
+        tables=("sap_wms_movimientos",),
+    )
+    assert len(results) == 1
+    assert results[0].action == "relaxed"
+    assert "event_date" in results[0].detail
+    assert "warehouse_id" in results[0].detail
+    assert client.query.call_count == 2
+    sqls = [c.args[0] for c in client.query.call_args_list]
+    assert any("DROP NOT NULL" in s and "event_date" in s for s in sqls)
+    assert any("DROP NOT NULL" in s and "warehouse_id" in s for s in sqls)
+
+
+def test_relax_bronze_already_nullable_no_alter(apply_ddl):
+    client = MagicMock()
+    f = MagicMock()
+    f.name = "event_date"
+    f.mode = "NULLABLE"
+    table = MagicMock()
+    table.schema = [f]
+    client.get_table.return_value = table
+
+    results = apply_ddl.relax_bronze_nullability(
+        client,
+        project_id="kora-sports",
+        dry_run=False,
+        tables=("sap_wms_movimientos",),
+    )
+    assert results[0].action == "nullable_ok"
+    client.query.assert_not_called()
 
 
 def test_load_project_id_from_env(apply_ddl, tmp_path, monkeypatch):
@@ -227,10 +300,10 @@ def test_silver_facts_also_integer_range(apply_ddl):
         assert "RANGE_BUCKET(fecha_id" in sql
         assert f"`silver_kora.{table}`" in sql
     assert "GENERATE_ARRAY(20250401, 20261101, 100)" in sql
-    # Quarantine deferred to Paso 6 — no CREATE de tablas quarantine
+    # Paso 6: quarantine_rows en DDL silver (shape vacío; CTAS la llena).
     assert "CREATE TABLE" in sql.upper()
-    assert not any(
-        "quarantine" in spec.table_fqn.lower()
+    assert any(
+        spec.table_fqn.endswith("quarantine_rows")
         for spec in apply_ddl.load_all_statements(SQL_DIR)
         if spec.layer == "silver"
     )
