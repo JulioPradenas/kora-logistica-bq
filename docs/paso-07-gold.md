@@ -26,6 +26,19 @@ Construir el **datamart único** `dm_logistica_retail` (conceptual) como tablas/
 
 ---
 
+## Incidente — orphan `ent_fecha` (delivery lag vs calendario)
+
+**Síntoma (Julio, `make run` real):** `build_gold` OK; post-check `ORPHAN ent_fecha: 79`. Reconcile, counts (salvo `d_fecha`), partitions y demás FKs OK.
+
+**Causa confirmada (seed 42):** `f_entregas.fecha_id` = `delivery_date` YYYYMMDD. El generador pone tránsito **0–4 días** sobre `ship_date` ≤ `2026-10-31` → **79** shipments con `delivery_date` ∈ **2026-11-01..04**. `d_fecha` solo iba hasta `2026-10-31` (579 días) → FK huérfana. Movimientos/stock no se pasan del horizonte WMS.
+
+**Decisión (diff mínimo):** ampliar `d_fecha` a **`2025-04-01`→`2026-11-04`** (583 días). Se mantiene el grano del levantamiento (día de entrega/intento), no se redefine a `ship_date`.  
+`PARTITION BY RANGE_BUCKET(..., GENERATE_ARRAY(20250401, 20261101, 100))` **sin cambio**: `fecha_id ≥ 20261101` cae en el último bucket (documentado; Nov corto no exige nuevo `GENERATE_ARRAY`).
+
+**No elegido:** cambiar `fecha_id` a `ship_date` — rompería el grano acordado (§7) y el OTIF “por día de entrega”.
+
+---
+
 ## Incidente — DDL gold como contrato vs schema BQ existente
 
 **Síntoma (Julio, `make run` real):** stage `[6] build_gold.py --dry-run` falló en:
@@ -54,7 +67,7 @@ SQL `01`–`07` y `10` pasaron dry-run.
 
 | Objeto | Grano (1 fila =) | Origen |
 |---|---|---|
-| `d_fecha` | 1 día calendario | Generado `2025-04-01`→`2026-10-31` |
+| `d_fecha` | 1 día calendario | Generado `2025-04-01`→`2026-11-04` (WMS + lag entrega ≤4d) |
 | `d_bodega` / `d_sku` / `d_transportista` | 1 master | Silver masters |
 | `f_movimientos_bodega` | bodega × SKU × movement_type × día | Agregación silver movimientos |
 | `f_stock_diario` | bodega × SKU × día | Silver stock (1:1) |
@@ -66,7 +79,7 @@ SQL `01`–`07` y `10` pasaron dry-run.
 
 | Tabla | Filas |
 |---|---:|
-| `d_fecha` | **579** |
+| `d_fecha` | **583** |
 | `d_bodega` | **8** |
 | `d_sku` | **250** |
 | `d_transportista` | **12** |
@@ -74,7 +87,7 @@ SQL `01`–`07` y `10` pasaron dry-run.
 | `f_stock_diario` | **208 440** |
 | `f_entregas` | **29 803** |
 
-**579 / 8 / 250 / 12 / 55548 / 208440 / 29803**
+**583 / 8 / 250 / 12 / 55548 / 208440 / 29803**
 
 ### Reconciliación gold ↔ silver
 

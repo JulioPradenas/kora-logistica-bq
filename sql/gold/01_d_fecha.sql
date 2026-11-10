@@ -1,5 +1,8 @@
--- Dim fecha: calendario generado (horizonte lab 2025-04-01 → 2026-10-31).
--- No depende de silver; PK fecha_id YYYYMMDD. Alineado a ddl_gold (NOT NULL).
+-- Dim fecha: calendario generado.
+-- Cubría el horizonte WMS 2025-04-01→2026-10-31; se extiende a 2026-11-04 porque
+-- f_entregas.fecha_id = delivery_date y el generador aplica tránsito 0–4 días
+-- (seed 42 → 79 shipments en Nov 1–4). PARTITION facts sigue en
+-- GENERATE_ARRAY(20250401, 20261101, 100): fecha_id ≥ 20261101 cae en el último bucket.
 CREATE OR REPLACE TABLE `gold_kora.d_fecha` AS
 SELECT
   CAST(FORMAT_DATE('%Y%m%d', d) AS INT64) AS fecha_id,
@@ -27,4 +30,4 @@ SELECT
     WHEN 12 THEN 'diciembre'
   END AS nombre_mes,
   EXTRACT(DAYOFWEEK FROM d) IN (1, 7) AS es_fin_de_semana
-FROM UNNEST(GENERATE_DATE_ARRAY(DATE '2025-04-01', DATE '2026-10-31', INTERVAL 1 DAY)) AS d;
+FROM UNNEST(GENERATE_DATE_ARRAY(DATE '2025-04-01', DATE '2026-11-04', INTERVAL 1 DAY)) AS d;

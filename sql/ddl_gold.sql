@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `gold_kora.d_fecha` (
   es_fin_de_semana BOOL NOT NULL
 )
 OPTIONS(
-  description="Dim fecha del datamart. Lab KORA — horizonte 2025-04-01→2026-10-31."
+  description="Dim fecha del datamart. Lab KORA — 2025-04-01→2026-11-04 (WMS + lag entrega ≤4d)."
 );
 
 CREATE TABLE IF NOT EXISTS `gold_kora.d_bodega` (

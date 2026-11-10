@@ -41,8 +41,8 @@ BRONZE_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_s
 SILVER_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
 GOLD_DIMS := d_fecha d_bodega d_sku d_transportista
 GOLD_FACTS := f_movimientos_bodega f_stock_diario f_entregas
-# seed 42: 579/8/250/12/55548/208440/29803
-GOLD_EXPECTED := 579 8 250 12 55548 208440 29803
+# seed 42: 583/8/250/12/55548/208440/29803 (d_fecha +4d lag entrega → 2026-11-04)
+GOLD_EXPECTED := 583 8 250 12 55548 208440 29803
 
 .PHONY: help setup test run
 
@@ -102,7 +102,7 @@ run: setup
 	  echo "==> quarantine_rows by reason"; \
 	  bq query --project_id=$(GCP_PROJECT) --use_legacy_sql=false --format=pretty \
 	    "SELECT reason, COUNT(*) AS n FROM \`$(GCP_PROJECT).silver_kora.quarantine_rows\` GROUP BY reason ORDER BY reason"; \
-	  echo "==> gold_kora row counts (expect 579/8/250/12/55548/208440/29803)"; \
+	  echo "==> gold_kora row counts (expect 583/8/250/12/55548/208440/29803)"; \
 	  for t in $(GOLD_DIMS) $(GOLD_FACTS); do \
 	    bq show --format=prettyjson $(GCP_PROJECT):gold_kora.$$t \
 	      | $(PY) -c "import json,sys; d=json.load(sys.stdin); print(f\"  gold_kora.$$t  num_rows={d.get('numRows')}\")"; \

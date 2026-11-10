@@ -68,9 +68,16 @@ VIEW_TABLES: tuple[str, ...] = (
     "v_stock_salud",
 )
 
+# Calendario gold: WMS horizon end + max transit lag del generador (0–4 días).
+# seed 42: delivery_date max = 2026-11-04 → 583 días (no 579).
+D_FECHA_START = "2025-04-01"
+D_FECHA_END = "2026-11-04"  # incluye Nov por lag de entrega; ver docs/paso-07-gold.md
+WMS_HORIZON_END = "2026-10-31"
+MAX_DELIVERY_TRANSIT_DAYS = 4
+
 # Conteos esperados seed 42 (silver limpio → gold). Documentados en docs/paso-07-gold.md.
 EXPECTED_GOLD_COUNTS: dict[str, int] = {
-    "d_fecha": 579,
+    "d_fecha": 583,
     "d_bodega": 8,
     "d_sku": 250,
     "d_transportista": 12,
@@ -184,6 +191,38 @@ def apply_build_file(client, path: Path, *, dry_run: bool = False) -> BuildResul
         action="would_apply" if dry_run else "applied",
         detail="ok",
     )
+
+
+def parse_d_fecha_bounds(sql_text: str) -> tuple[str, str]:
+    """Extrae (start, end) ISO de GENERATE_DATE_ARRAY en 01_d_fecha.sql."""
+    m = re.search(
+        r"GENERATE_DATE_ARRAY\s*\(\s*DATE\s+'(\d{4}-\d{2}-\d{2})'\s*,\s*DATE\s+'(\d{4}-\d{2}-\d{2})'",
+        sql_text,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        raise ValueError("GENERATE_DATE_ARRAY bounds not found in d_fecha SQL")
+    return m.group(1), m.group(2)
+
+
+def d_fecha_covers_fact_dates(
+    *,
+    d_fecha_start: str,
+    d_fecha_end: str,
+    wms_horizon_end: str = WMS_HORIZON_END,
+    max_transit_days: int = MAX_DELIVERY_TRANSIT_DAYS,
+) -> bool:
+    """
+    True si d_fecha cubre event/snapshot (≤ wms_horizon_end) y delivery_date
+    hasta wms_horizon_end + max_transit_days (lag last-mile del generador).
+    """
+    from datetime import date, timedelta
+
+    start = date.fromisoformat(d_fecha_start)
+    end = date.fromisoformat(d_fecha_end)
+    wms_end = date.fromisoformat(wms_horizon_end)
+    need_end = wms_end + timedelta(days=max_transit_days)
+    return start <= date.fromisoformat(D_FECHA_START) and end >= need_end
 
 
 def assert_ctas_redeclarations(sql_text: str, table: str) -> list[str]:

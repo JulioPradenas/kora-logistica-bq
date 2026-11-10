@@ -69,7 +69,7 @@ def test_sql_files_exist_ctas_no_dml_and_partition(build_gold):
 
 def test_expected_gold_counts_seed_42(build_gold):
     assert build_gold.EXPECTED_GOLD_COUNTS == {
-        "d_fecha": 579,
+        "d_fecha": 583,
         "d_bodega": 8,
         "d_sku": 250,
         "d_transportista": 12,
@@ -80,6 +80,44 @@ def test_expected_gold_counts_seed_42(build_gold):
     # f_entregas = silver entregas; f_stock = silver stock
     assert build_gold.EXPECTED_GOLD_COUNTS["f_entregas"] == 29_803
     assert build_gold.EXPECTED_GOLD_COUNTS["f_stock_diario"] == 208_440
+
+
+def test_d_fecha_covers_all_fact_dates_including_delivery_lag(build_gold):
+    """
+    Regresión orphan ent_fecha (Julio): delivery_date puede ser WMS_END+0..4.
+    d_fecha debe cubrir hasta 2026-11-04; el SQL viejo a 2026-10-31 falla.
+    """
+    from datetime import date
+
+    sql = (SQL_DIR / "01_d_fecha.sql").read_text(encoding="utf-8")
+    start, end = build_gold.parse_d_fecha_bounds(sql)
+    assert build_gold.d_fecha_covers_fact_dates(
+        d_fecha_start=start, d_fecha_end=end
+    )
+    assert end == build_gold.D_FECHA_END == "2026-11-04"
+    assert start == build_gold.D_FECHA_START
+    # Conteos: 2025-04-01 → 2026-11-04 inclusive = 583
+    n = (date.fromisoformat(end) - date.fromisoformat(start)).days + 1
+    assert n == 583
+    assert build_gold.EXPECTED_GOLD_COUNTS["d_fecha"] == n
+
+    # Control negativo: horizonte WMS-only (bug Julio, 79 orphans).
+    assert not build_gold.d_fecha_covers_fact_dates(
+        d_fecha_start="2025-04-01",
+        d_fecha_end="2026-10-31",
+    )
+
+    # Contra seed 42 real (si CSV presente): max delivery_date ≤ d_fecha end.
+    raw_ent = ROOT / "data" / "raw" / "sap_tm_entregas.csv"
+    if raw_ent.is_file():
+        import pandas as pd
+
+        ent = pd.read_csv(raw_ent, dtype=str)
+        dd = pd.to_datetime(ent["delivery_date"], errors="coerce").dropna()
+        assert dd.max().date() <= date.fromisoformat(end)
+        # Exact orphan count under old calendar
+        orphans = (dd.dt.date > date(2026, 10, 31)).sum()
+        assert orphans == 79
 
 
 def test_ddl_required_modes_match_ctas_outputs(build_gold):
@@ -259,8 +297,10 @@ def test_makefile_n_run_includes_build_gold():
     idx_silver = out.index("scripts/transform_silver.py")
     idx_gold = out.index("scripts/build_gold.py")
     assert idx_silver < idx_gold
-    assert "55548" in MAKEFILE.read_text(encoding="utf-8")
-    assert "gold_kora row counts" in MAKEFILE.read_text(encoding="utf-8")
+    mk = MAKEFILE.read_text(encoding="utf-8")
+    assert "55548" in mk
+    assert "583" in mk
+    assert "gold_kora row counts" in mk
 
 
 def test_f_entregas_flags_never_null_expression(build_gold):
