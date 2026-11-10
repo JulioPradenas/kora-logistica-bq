@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS `gold_kora.f_entregas` (
   eta_ts DATETIME NOT NULL,
   ata_ts DATETIME,
   status STRING NOT NULL OPTIONS(description="delivered | late_delivered | failed | in_transit"),
-  qty_delivered INT64 NOT NULL
+  qty_delivered INT64 NOT NULL,
+  on_time BOOL NOT NULL OPTIONS(description="ATA IS NOT NULL AND ATA <= ETA"),
+  in_full BOOL NOT NULL OPTIONS(description="qty_delivered >= qty_ordered WMS OUT (shipment_id); FALSE si sin puente")
 )
 PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
 CLUSTER BY bodega_id, transportista_id
