@@ -13,9 +13,10 @@ Sandbox:
   - Sin DML (no INSERT/UPDATE/DELETE/MERGE).
   - CTAS de facts re-declara PARTITION BY / CLUSTER BY (si no, se pierden).
 
-Orden: dims → facts → views.
+Orden: dims → facts → views (08–10 KPI + 11–13 Looker heatmap/funnel/drill).
 Post-run: reconciliación gold↔silver, orphan FKs = 0, rangePartitioning,
-          0 filas en __UNPARTITIONED__/__NULL__ (Paso 8).
+          0 filas en __UNPARTITIONED__/__NULL__ (Paso 8),
+          vistas existen + rows>0 + coherencia Looker (Paso 9).
 """
 from __future__ import annotations
 
@@ -51,7 +52,7 @@ BQ_LOCATION = "southamerica-west1"
 SILVER_DATASET = "silver_kora"
 GOLD_DATASET = "gold_kora"
 
-# Orden: dims → facts → views.
+# Orden: dims → facts → views (Paso 7 KPIs + Paso 9 Looker heatmap/funnel/drill).
 BUILD_FILES: tuple[str, ...] = (
     "01_d_fecha.sql",
     "02_d_bodega.sql",
@@ -63,6 +64,9 @@ BUILD_FILES: tuple[str, ...] = (
     "08_v_otif_diario.sql",
     "09_v_cycle_time.sql",
     "10_v_stock_salud.sql",
+    "11_v_heatmap_bodega_semana.sql",
+    "12_v_funnel_logistico.sql",
+    "13_v_entregas_drill.sql",
 )
 
 FACT_TABLES: tuple[str, ...] = (
@@ -82,6 +86,16 @@ VIEW_TABLES: tuple[str, ...] = (
     "v_otif_diario",
     "v_cycle_time",
     "v_stock_salud",
+    "v_heatmap_bodega_semana",
+    "v_funnel_logistico",
+    "v_entregas_drill",
+)
+
+# Vistas Looker Paso 9 (heatmap / funnel / drill) — post-check rows > 0 + coherencia.
+LOOKER_VIEWS: tuple[str, ...] = (
+    "v_heatmap_bodega_semana",
+    "v_funnel_logistico",
+    "v_entregas_drill",
 )
 
 # Calendario gold: WMS horizon end + max transit lag del generador (0–4 días).
@@ -450,6 +464,9 @@ def assert_views_columns_in_gold_contract(
         "08_v_otif_diario.sql",
         "09_v_cycle_time.sql",
         "10_v_stock_salud.sql",
+        "11_v_heatmap_bodega_semana.sql",
+        "12_v_funnel_logistico.sql",
+        "13_v_entregas_drill.sql",
     )
     for fname in view_files:
         path = base / fname
@@ -676,6 +693,132 @@ def post_run_checks(client) -> int:
         print(f"  {'OK' if ok else 'MISMATCH':8}  {table}: {n} (expected {expected})")
         if not ok:
             failures += 1
+
+    failures += post_run_view_checks(client)
+    return failures
+
+
+def view_exists(client, view: str) -> bool:
+    """True si la vista/tabla gold existe (get_table)."""
+    try:
+        client.get_table(f"{GOLD_DATASET}.{view}")
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def post_run_view_checks(client) -> int:
+    """
+    Paso 9: vistas Looker existen, rows > 0, coherencia mínima.
+    Idempotente: solo SELECT / get_table; no escribe.
+    """
+    failures = 0
+    print("==> Looker views exist + rows > 0")
+    for view in VIEW_TABLES:
+        try:
+            exists = view_exists(client, view)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ERROR     {view}: {exc}")
+            failures += 1
+            continue
+        if not exists:
+            print(f"  MISSING   {view}")
+            failures += 1
+            continue
+        n = scalar_count(client, table_count_sql(GOLD_DATASET, view))
+        ok = n > 0
+        print(f"  {'OK' if ok else 'EMPTY':8}  {view}: rows={n}")
+        if not ok:
+            failures += 1
+
+    print("==> Looker views coherence (Paso 9)")
+    # Heatmap: al menos 1 bodega y 1 semana.
+    heat_sql = f"""
+SELECT
+  COUNT(DISTINCT bodega_id) AS n_bodegas,
+  COUNT(DISTINCT semana_inicio) AS n_semanas,
+  COUNTIF(late_rate IS NULL) AS n_null_late
+FROM `{GOLD_DATASET}.v_heatmap_bodega_semana`
+""".strip()
+    try:
+        h = list(run_query(client, heat_sql, dry_run=False))[0]
+        n_bodegas, n_semanas = int(h["n_bodegas"]), int(h["n_semanas"])
+        n_null_late = int(h["n_null_late"])
+        heat_ok = n_bodegas > 0 and n_semanas > 0 and n_null_late == 0
+        print(
+            f"  {'OK' if heat_ok else 'FAIL':8}  heatmap: "
+            f"bodegas={n_bodegas} semanas={n_semanas} null_late={n_null_late}"
+        )
+        if not heat_ok:
+            failures += 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR     heatmap coherence: {exc}")
+        failures += 1
+
+    # Funnel shipment_e2e: exactamente 3 stages; picking/despacho/entrega presentes.
+    funnel_sql = f"""
+SELECT
+  COUNT(*) AS n_rows,
+  COUNTIF(stage_label = 'picking') AS n_picking,
+  COUNTIF(stage_label = 'despacho') AS n_despacho,
+  COUNTIF(stage_label = 'entrega') AS n_entrega,
+  MAX(IF(stage_label = 'picking', n_shipments, NULL)) AS c_picking,
+  MAX(IF(stage_label = 'despacho', n_shipments, NULL)) AS c_despacho,
+  MAX(IF(stage_label = 'entrega', n_shipments, NULL)) AS c_entrega
+FROM `{GOLD_DATASET}.v_funnel_logistico`
+WHERE funnel_kind = 'shipment_e2e'
+""".strip()
+    try:
+        f = list(run_query(client, funnel_sql, dry_run=False))[0]
+        n_rows = int(f["n_rows"])
+        stages_ok = (
+            n_rows == 3
+            and int(f["n_picking"]) == 1
+            and int(f["n_despacho"]) == 1
+            and int(f["n_entrega"]) == 1
+        )
+        c_pick = int(f["c_picking"] or 0)
+        c_desp = int(f["c_despacho"] or 0)
+        c_ent = int(f["c_entrega"] or 0)
+        # Conversión E2E: entrega ≤ despacho; picking y despacho > 0.
+        counts_ok = c_pick > 0 and c_desp > 0 and c_ent > 0 and c_ent <= c_desp
+        funnel_ok = stages_ok and counts_ok
+        print(
+            f"  {'OK' if funnel_ok else 'FAIL':8}  funnel shipment_e2e: "
+            f"stages={n_rows} pick={c_pick} despacho={c_desp} entrega={c_ent}"
+        )
+        if not funnel_ok:
+            failures += 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR     funnel coherence: {exc}")
+        failures += 1
+
+    # Drill: comuna + transportista siempre; sku puede ser NULL si sin OUT bridge.
+    drill_sql = f"""
+SELECT
+  COUNT(*) AS n,
+  COUNTIF(comuna_id IS NULL OR comuna_id = '') AS n_sin_comuna,
+  COUNTIF(transportista_id IS NULL OR transportista_id = '') AS n_sin_carrier,
+  COUNTIF(sku_id IS NOT NULL) AS n_con_sku
+FROM `{GOLD_DATASET}.v_entregas_drill`
+""".strip()
+    try:
+        dr = list(run_query(client, drill_sql, dry_run=False))[0]
+        n = int(dr["n"])
+        n_sin_comuna = int(dr["n_sin_comuna"])
+        n_sin_carrier = int(dr["n_sin_carrier"])
+        n_con_sku = int(dr["n_con_sku"])
+        drill_ok = n > 0 and n_sin_comuna == 0 and n_sin_carrier == 0 and n_con_sku > 0
+        print(
+            f"  {'OK' if drill_ok else 'FAIL':8}  drill: "
+            f"rows={n} sin_comuna={n_sin_comuna} sin_carrier={n_sin_carrier} "
+            f"con_sku={n_con_sku}"
+        )
+        if not drill_ok:
+            failures += 1
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR     drill coherence: {exc}")
+        failures += 1
 
     return failures
 
