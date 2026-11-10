@@ -14,7 +14,7 @@
 2. `apply_ddl`: detectar cambio de partition-spec y **recrear** tablas (DROP+CREATE) de forma idempotente.
 3. Post-run: **0 filas** en `__UNPARTITIONED__` / `__NULL__` (`INFORMATION_SCHEMA.PARTITIONS`); fallar si hay.
 4. Demo de bytes: `sql/demo_partition_prune.sql` + stage 7 `scripts/demo_partition_prune.py`.
-5. Documentar resultados en README con **placeholders** (sin inventar números).
+5. Documentar resultados reales de `make run` (Julio) en README / este doc / briefing.
 
 **Fuera de alcance:** Looker publish, credenciales GCP en CI/agente, merge a `main` por el agente.
 
@@ -84,17 +84,28 @@ Archivo: [`sql/demo_partition_prune.sql`](../sql/demo_partition_prune.sql) sobre
 |---|---|---|
 | **(a)** | ninguno | baseline bytes |
 | **(b)** | un mes `fecha_id` | partition prune |
-| **(c)** | mes + `bodega_id` | prune + clustering |
+| **(c)** | mes + `bodega_id` | prune + clustering (en job real) |
 
 Stage 7: `scripts/demo_partition_prune.py` — **dry_run** de las 3, imprime `totalBytesProcessed` y **% vs (a)**. Compatible con `make run DRY=1`.
 
-### Honestidad dry-run
+### Resultados reales (`make run`, Julio)
 
-- El dry_run de BigQuery **estima** bytes; en tablas chicas / estimación por partición el ahorro de **CLUSTER BY** suele **no** verse ( `(c) ≈ (b)` ).
-- Jobs reales tienen **mínimo ~10 MB** facturados.
-- Opcional: `python scripts/demo_partition_prune.py --real-cluster` ejecuta solo **(c)** como job real (documentar; no inventar).
+| Query | Filtro | `totalBytesProcessed` (dry_run) | % vs (a) |
+|---|---|---|---|
+| **(a)** | ninguno | 1 667 520 B (1.59 MiB) | 100% |
+| **(b)** | un mes `fecha_id` | 178 560 B (174.38 KiB) | **10.7%** |
+| **(c)** | mes + `bodega_id` | 256 680 B (250.66 KiB) | **15.4%** |
 
-Rellenar la tabla del README con salida real de `make run` en la laptop — **placeholders** hasta entonces.
+Mismo run: **6 tablas** recreadas a 108 buckets; `f_entregas` range end=`20261201`; **0** filas `__UNPARTITIONED__`/`__NULL__`; gold counts **583/8/250/12/55548/208440/29803**.
+
+### Por qué (c) > (b) en dry_run (honestidad)
+
+1. BigQuery cobra por **columnas leídas**. (c) filtra/proyecta `bodega_id` además de las de (b) → la estimación dry_run sube.
+2. El dry_run estima a **nivel de partición**; **no acredita** el skip de bloques de clustering.
+3. El ahorro de `CLUSTER BY` solo se ve en **bytes facturados de un job real** (`python scripts/demo_partition_prune.py --real-cluster` para (c)).
+4. Jobs reales tienen **mínimo ~10 MB** facturados por query — en este lab el dataset es chico, así que el job real de (c) puede redondear al mínimo y no ser comparable 1:1 con el dry_run.
+
+Conclusión de entrevista: (b) vs (a) sí demuestra **partition prune** (~10.7% del baseline). (c) en dry_run **no** demuestra clustering; afirmar lo contrario sería mentir con la herramienta.
 
 ---
 

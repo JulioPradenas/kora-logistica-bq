@@ -58,16 +58,18 @@ make test                               # pytest (mocks; sin GCP)
 
 ### Demo prune — resultados (`f_stock_diario`)
 
-Placeholders: rellenar con la salida real de `make run` / `python scripts/demo_partition_prune.py` en la laptop (ADC). **No inventar números.**
+Números reales de `make run` (Julio, ADC laptop; dry_run stage 7). **No inventados.**
 
 | Query | Filtro | `totalBytesProcessed` (dry_run) | % vs (a) |
 |---|---|---|---|
-| (a) | ninguno | _TBD_ | 100% |
-| (b) | un mes `fecha_id` | _TBD_ | _TBD_ |
-| (c) | mes + `bodega_id` | _TBD_ | _TBD_ |
-| (c) real (opcional `--real-cluster`) | mes + `bodega_id` | _TBD_ | _TBD_ |
+| (a) | ninguno | 1 667 520 B (1.59 MiB) | 100% |
+| (b) | un mes `fecha_id` | 178 560 B (174.38 KiB) | 10.7% |
+| (c) | mes + `bodega_id` | 256 680 B (250.66 KiB) | 15.4% |
+| (c) real (opcional `--real-cluster`) | mes + `bodega_id` | _(correr en laptop; mín. ~10 MB facturados)_ | — |
 
-**Nota:** dry_run estima; el ahorro de clustering a menudo **no** aparece en dry_run (granularidad por partición / mínimo ~10 MB en jobs reales). Ver [docs/paso-08-pruning.md](docs/paso-08-pruning.md).
+**Post-run del mismo `make run`:** 6 tablas recreadas a 108 buckets; `f_entregas` range end=`20261201`; **0** filas en `__UNPARTITIONED__`/`__NULL__`; gold counts 583/8/250/12/55548/208440/29803.
+
+**Por qué (c) > (b) en dry_run:** BigQuery factura **columnas leídas**. (c) añade `bodega_id` al SELECT/filtro → más bytes estimados. El dry_run estima a **nivel de partición** y **no acredita** el skip de bloques de clustering. El ahorro de `CLUSTER BY` solo aparece en bytes facturados de un **job real** (`--real-cluster`); además hay **mínimo ~10 MB** por query. Ver [docs/paso-08-pruning.md](docs/paso-08-pruning.md).
 
 Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md) · [docs/paso-06-silver.md](docs/paso-06-silver.md) · [docs/paso-07-gold.md](docs/paso-07-gold.md) · [docs/paso-08-pruning.md](docs/paso-08-pruning.md).  
 CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
