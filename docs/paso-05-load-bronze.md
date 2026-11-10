@@ -32,11 +32,11 @@ Poblar el **data contract** bronze con el export sintético SAP-like, sin DML (s
 | `md_bodega` | **8** |
 | `md_sku` | **250** |
 | `md_transportista` | **12** |
-| `sap_wms_movimientos` | **60 120** |
-| `sap_wms_stock_snapshot` | **208 440** |
-| `sap_tm_entregas` | **29 803** |
+| `sap_wms_movimientos` | **60 285** |
+| `sap_wms_stock_snapshot` | **208 555** |
+| `sap_tm_entregas` | **29 923** |
 
-Resumen: **8 / 250 / 12 / 60120 / 208440 / 29803**.
+Resumen: **8 / 250 / 12 / 60285 / 208555 / 29923** (Paso 6: núcleo limpio + anomalías documentadas; ver [data/README.md](../data/README.md) y [paso-06-silver.md](paso-06-silver.md)).
 
 ---
 
@@ -134,14 +134,15 @@ Consola: https://console.cloud.google.com/bigquery?project=kora-sports
 
 ## Makefile / verify
 
-`STAGES` (orden):
+`STAGES` (orden; Paso 6 añade transform):
 
 1. `scripts/setup_bigquery.py`
 2. `scripts/apply_ddl.py`
 3. `scripts/generate_synthetic.py` ← siempre
 4. `scripts/load_bronze.py`
+5. `scripts/transform_silver.py` ← Paso 6
 
-Tras apply (si `DRY!=1`): `bq ls` datasets + **num_rows** de las 6 tablas bronze + schema de un fact gold.
+Tras apply (si `DRY!=1`): `bq ls` + **num_rows** bronze/silver + quarantine by reason + schema de un fact gold.
 
 ---
 

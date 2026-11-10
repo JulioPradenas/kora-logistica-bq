@@ -78,12 +78,14 @@ def test_gold_facts_integer_range_and_clustering(apply_ddl):
 
 def test_load_all_statements_counts(apply_ddl):
     specs = apply_ddl.load_all_statements(SQL_DIR)
-    # 6 bronze + 6 silver + 4 dims + 3 facts = 19
-    assert len(specs) == 19
+    # 6 bronze + 7 silver (incl. quarantine_rows) + 4 dims + 3 facts = 20
+    assert len(specs) == 20
     layers = {s.layer for s in specs}
     assert layers == {"bronze", "silver", "gold"}
     bronze = [s for s in specs if s.layer == "bronze"]
     assert {s.table_fqn.split(".")[-1] for s in bronze} == set(apply_ddl.BRONZE_CONTRACT)
+    silver_tables = {s.table_fqn.split(".")[-1] for s in specs if s.layer == "silver"}
+    assert "quarantine_rows" in silver_tables
 
 
 def test_all_statements_are_create_if_not_exists(apply_ddl):
@@ -197,7 +199,7 @@ def test_run_apply_all_missing(apply_ddl, capsys):
 
     rc = apply_ddl.run(dry_run=False, project_id="kora-sports", client=client)
     assert rc == 0
-    assert client.query.call_count == 19
+    assert client.query.call_count == 20
     out = capsys.readouterr().out
     assert "OK:" in out
     assert "created" in out
@@ -227,10 +229,10 @@ def test_silver_facts_also_integer_range(apply_ddl):
         assert "RANGE_BUCKET(fecha_id" in sql
         assert f"`silver_kora.{table}`" in sql
     assert "GENERATE_ARRAY(20250401, 20261101, 100)" in sql
-    # Quarantine deferred to Paso 6 — no CREATE de tablas quarantine
+    # Paso 6: quarantine_rows en DDL silver (shape vacío; CTAS la llena).
     assert "CREATE TABLE" in sql.upper()
-    assert not any(
-        "quarantine" in spec.table_fqn.lower()
+    assert any(
+        spec.table_fqn.endswith("quarantine_rows")
         for spec in apply_ddl.load_all_statements(SQL_DIR)
         if spec.layer == "silver"
     )

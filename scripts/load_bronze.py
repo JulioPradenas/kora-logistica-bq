@@ -49,14 +49,15 @@ BRONZE_TABLES: tuple[str, ...] = (
     "sap_tm_entregas",
 )
 
-# Conteos esperados con seed 42 + horizonte fijo (2025-04-01 → 2026-10-31).
+# Conteos esperados con seed 42 + horizonte fijo + anomalías Paso 6.
+# Núcleo limpio 60120/208440/29803 + extras documentados (data/README.md).
 EXPECTED_COUNTS: dict[str, int] = {
     "md_bodega": 8,
     "md_sku": 250,
     "md_transportista": 12,
-    "sap_wms_movimientos": 60_120,
-    "sap_wms_stock_snapshot": 208_440,
-    "sap_tm_entregas": 29_803,
+    "sap_wms_movimientos": 60_285,
+    "sap_wms_stock_snapshot": 208_555,
+    "sap_tm_entregas": 29_923,
 }
 
 

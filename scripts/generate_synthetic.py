@@ -13,6 +13,9 @@ Override opcional: HORIZON_END=YYYY-MM-DD
 
 `--dry-run` (Paso 5 / Makefile): reporta seed, horizonte y paths de salida
 sin escribir CSV (compatible con `make run` dry-run → apply).
+
+Paso 6: tras el núcleo limpio inyecta anomalías documentadas (`ANOMALY_COUNTS`,
+seed 42) — exact/key dupes, FK rotas, nulls requeridos, status casing.
 """
 from __future__ import annotations
 
@@ -64,6 +67,48 @@ MOV_TYPES = [
 ]
 DELIVERY_STATUS = ["delivered", "delivered", "delivered", "delivered", "late_delivered", "failed", "in_transit"]
 
+# ---------------------------------------------------------------------------
+# Anomalías documentadas (Paso 6) — conteos FIJOS, seed 42 → deterministas.
+# Se inyectan DESPUÉS del export limpio; no alteran la secuencia RNG del núcleo.
+# status_casing_* muta filas in-place (no suma filas bronze).
+# ---------------------------------------------------------------------------
+ANOMALY_COUNTS: dict[str, int] = {
+    "exact_dupes_movimientos": 50,
+    "key_dupes_movimientos": 40,
+    "missing_fk_warehouse_movimientos": 30,
+    "missing_fk_sku_movimientos": 25,
+    "null_required_movimientos": 20,
+    "exact_dupes_entregas": 40,
+    "key_dupes_entregas": 30,
+    "missing_fk_carrier_entregas": 20,
+    "missing_fk_warehouse_entregas": 15,
+    "null_required_entregas": 15,
+    "status_casing_entregas": 80,
+    "exact_dupes_stock": 50,
+    "key_dupes_stock": 30,
+    "missing_fk_sku_stock": 25,
+    "null_required_stock": 10,
+}
+
+# IDs fuera de maestros (FK rotas) — fijos para tests.
+ANOMALY_WH = "WH-99"
+ANOMALY_SKU = "SKU-99999"
+ANOMALY_CARRIER = "CAR-99"
+
+# Variantes de status que silver NORMALIZA (no quarantinea).
+STATUS_CASING_VARIANTS = (
+    "Delivered",
+    " DELIVERED",
+    "delivered ",
+    "LATE_DELIVERED",
+    " Late_Delivered ",
+    "FAILED",
+    " failed ",
+    "IN_TRANSIT",
+    "In_Transit ",
+    "  delivered",
+)
+
 
 def pick_mov_type():
     codes, types, labels, weights = zip(*MOV_TYPES)
@@ -107,6 +152,222 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _take_rows(df: pd.DataFrame, n: int, rng: random.Random) -> pd.DataFrame:
+    """Sample n rows deterministically without replacement (n <= len(df))."""
+    if n <= 0:
+        return df.iloc[0:0].copy()
+    if n > len(df):
+        raise ValueError(f"anomaly budget {n} > available rows {len(df)}")
+    idx = rng.sample(range(len(df)), k=n)
+    return df.iloc[idx].copy()
+
+
+def inject_anomalies(
+    *,
+    df_mov: pd.DataFrame,
+    df_stk: pd.DataFrame,
+    df_ent: pd.DataFrame,
+    counts: dict[str, int] | None = None,
+    rng: random.Random | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, int]]:
+    """
+    Inyecta anomalías SAP-export-like con conteos fijos (Paso 6).
+
+    Usa un RNG dedicado (seed 42) independiente del generador principal para
+    no perturbar el núcleo limpio ni el determinismo del seed test.
+    """
+    budget = dict(counts or ANOMALY_COUNTS)
+    rng = rng or random.Random(SEED)
+    applied: dict[str, int] = {}
+
+    mov_extra: list[dict] = []
+    stk_extra: list[dict] = []
+    ent_extra: list[dict] = []
+
+    # --- movimientos ---
+    n = budget["exact_dupes_movimientos"]
+    exact = _take_rows(df_mov, n, rng)
+    mov_extra.extend(exact.to_dict(orient="records"))
+    applied["exact_dupes_movimientos"] = n
+
+    n = budget["key_dupes_movimientos"]
+    key_src = _take_rows(df_mov, n, rng)
+    for i, row in enumerate(key_src.to_dict(orient="records")):
+        row = dict(row)
+        # Misma PK lógica, payload distinto (qty) — típico re-export parcial.
+        row["qty"] = int(row["qty"] or 0) + 1000 + i
+        row["movement_code"] = "701"
+        row["movement_type"] = "ADJ"
+        mov_extra.append(row)
+    applied["key_dupes_movimientos"] = n
+
+    n = budget["missing_fk_warehouse_movimientos"]
+    fk_wh = _take_rows(df_mov, n, rng)
+    for i, row in enumerate(fk_wh.to_dict(orient="records")):
+        row = dict(row)
+        row["movement_id"] = f"MOV-FKWH{i:05d}"
+        row["warehouse_id"] = ANOMALY_WH
+        mov_extra.append(row)
+    applied["missing_fk_warehouse_movimientos"] = n
+
+    n = budget["missing_fk_sku_movimientos"]
+    fk_sku = _take_rows(df_mov, n, rng)
+    for i, row in enumerate(fk_sku.to_dict(orient="records")):
+        row = dict(row)
+        row["movement_id"] = f"MOV-FKSKU{i:05d}"
+        row["sku_id"] = ANOMALY_SKU
+        mov_extra.append(row)
+    applied["missing_fk_sku_movimientos"] = n
+
+    n = budget["null_required_movimientos"]
+    null_src = _take_rows(df_mov, n, rng)
+    for i, row in enumerate(null_src.to_dict(orient="records")):
+        row = dict(row)
+        row["movement_id"] = f"MOV-NULL{i:05d}"
+        if i % 2 == 0:
+            row["event_date"] = ""
+        else:
+            row["warehouse_id"] = ""
+        mov_extra.append(row)
+    applied["null_required_movimientos"] = n
+
+    # --- stock ---
+    n = budget["exact_dupes_stock"]
+    exact = _take_rows(df_stk, n, rng)
+    stk_extra.extend(exact.to_dict(orient="records"))
+    applied["exact_dupes_stock"] = n
+
+    n = budget["key_dupes_stock"]
+    key_src = _take_rows(df_stk, n, rng)
+    for i, row in enumerate(key_src.to_dict(orient="records")):
+        row = dict(row)
+        row["on_hand_qty"] = int(row["on_hand_qty"]) + 500 + i
+        stk_extra.append(row)
+    applied["key_dupes_stock"] = n
+
+    n = budget["missing_fk_sku_stock"]
+    fk_sku = _take_rows(df_stk, n, rng)
+    for i, row in enumerate(fk_sku.to_dict(orient="records")):
+        row = dict(row)
+        # Clave natural única (date+wh+sku anómalo) → quarantine missing_fk_sku, no elim_dupes.
+        row["sku_id"] = ANOMALY_SKU
+        row["warehouse_id"] = "WH-01"
+        row["snapshot_date"] = (date(2025, 6, 1) + timedelta(days=i)).isoformat()
+        stk_extra.append(row)
+    applied["missing_fk_sku_stock"] = n
+
+    n = budget["null_required_stock"]
+    null_src = _take_rows(df_stk, n, rng)
+    for i, row in enumerate(null_src.to_dict(orient="records")):
+        row = dict(row)
+        row["sku_id"] = f"SKU-NULL{i:05d}"
+        if i % 2 == 0:
+            row["snapshot_date"] = ""
+        else:
+            row["warehouse_id"] = ""
+        stk_extra.append(row)
+    applied["null_required_stock"] = n
+
+    # --- entregas ---
+    n = budget["exact_dupes_entregas"]
+    exact = _take_rows(df_ent, n, rng)
+    ent_extra.extend(exact.to_dict(orient="records"))
+    applied["exact_dupes_entregas"] = n
+
+    n = budget["key_dupes_entregas"]
+    key_src = _take_rows(df_ent, n, rng)
+    for i, row in enumerate(key_src.to_dict(orient="records")):
+        row = dict(row)
+        row["qty_delivered"] = int(row["qty_delivered"] or 0) + 50 + i
+        row["status"] = "failed"
+        ent_extra.append(row)
+    applied["key_dupes_entregas"] = n
+
+    n = budget["missing_fk_carrier_entregas"]
+    fk_car = _take_rows(df_ent, n, rng)
+    for i, row in enumerate(fk_car.to_dict(orient="records")):
+        row = dict(row)
+        row["shipment_id"] = f"SHP-FKCAR{i:05d}"
+        row["carrier_id"] = ANOMALY_CARRIER
+        ent_extra.append(row)
+    applied["missing_fk_carrier_entregas"] = n
+
+    n = budget["missing_fk_warehouse_entregas"]
+    fk_wh = _take_rows(df_ent, n, rng)
+    for i, row in enumerate(fk_wh.to_dict(orient="records")):
+        row = dict(row)
+        row["shipment_id"] = f"SHP-FKWH{i:05d}"
+        row["warehouse_id"] = ANOMALY_WH
+        ent_extra.append(row)
+    applied["missing_fk_warehouse_entregas"] = n
+
+    n = budget["null_required_entregas"]
+    null_src = _take_rows(df_ent, n, rng)
+    for i, row in enumerate(null_src.to_dict(orient="records")):
+        row = dict(row)
+        row["shipment_id"] = f"SHP-NULL{i:05d}"
+        if i % 2 == 0:
+            row["delivery_date"] = ""
+        else:
+            row["order_id"] = ""
+        ent_extra.append(row)
+    applied["null_required_entregas"] = n
+
+    # status casing / whitespace — mutate in-place (no extra bronze rows)
+    n = budget["status_casing_entregas"]
+    casing_idx = rng.sample(range(len(df_ent)), k=n)
+    df_ent = df_ent.copy()
+    for j, idx in enumerate(casing_idx):
+        df_ent.iat[idx, df_ent.columns.get_loc("status")] = STATUS_CASING_VARIANTS[
+            j % len(STATUS_CASING_VARIANTS)
+        ]
+    applied["status_casing_entregas"] = n
+
+    df_mov_out = pd.concat([df_mov, pd.DataFrame(mov_extra)], ignore_index=True)
+    df_stk_out = pd.concat([df_stk, pd.DataFrame(stk_extra)], ignore_index=True)
+    df_ent_out = pd.concat([df_ent, pd.DataFrame(ent_extra)], ignore_index=True)
+    return df_mov_out, df_stk_out, df_ent_out, applied
+
+
+def bronze_expected_counts_from_clean(
+    *,
+    n_mov: int,
+    n_stk: int,
+    n_ent: int,
+    counts: dict[str, int] | None = None,
+) -> dict[str, int]:
+    """Conteos bronze = núcleo limpio + filas añadidas por anomalías (no casing)."""
+    budget = counts or ANOMALY_COUNTS
+    add_mov = (
+        budget["exact_dupes_movimientos"]
+        + budget["key_dupes_movimientos"]
+        + budget["missing_fk_warehouse_movimientos"]
+        + budget["missing_fk_sku_movimientos"]
+        + budget["null_required_movimientos"]
+    )
+    add_stk = (
+        budget["exact_dupes_stock"]
+        + budget["key_dupes_stock"]
+        + budget["missing_fk_sku_stock"]
+        + budget["null_required_stock"]
+    )
+    add_ent = (
+        budget["exact_dupes_entregas"]
+        + budget["key_dupes_entregas"]
+        + budget["missing_fk_carrier_entregas"]
+        + budget["missing_fk_warehouse_entregas"]
+        + budget["null_required_entregas"]
+    )
+    return {
+        "md_bodega": 8,
+        "md_sku": 250,
+        "md_transportista": 12,
+        "sap_wms_movimientos": n_mov + add_mov,
+        "sap_wms_stock_snapshot": n_stk + add_stk,
+        "sap_tm_entregas": n_ent + add_ent,
+    }
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     end = resolve_horizon_end()
@@ -125,6 +386,9 @@ def main(argv: list[str] | None = None) -> None:
             "sap_tm_entregas.csv",
         ):
             print(f"  would_create  {OUT / name}")
+        print("would_inject anomalies (Paso 6):")
+        for key in sorted(ANOMALY_COUNTS):
+            print(f"  {key}: {ANOMALY_COUNTS[key]}")
         print("dry-run: no se escribieron CSV.")
         return
 
@@ -322,6 +586,12 @@ def main(argv: list[str] | None = None) -> None:
     df_mov = pd.DataFrame(movimientos)
     df_stk = pd.DataFrame(stock_rows)
     df_ent = pd.DataFrame(entregas)
+    n_mov_clean, n_stk_clean, n_ent_clean = len(df_mov), len(df_stk), len(df_ent)
+
+    # Anomalías documentadas (Paso 6): RNG dedicado seed 42 — no toca el núcleo.
+    df_mov, df_stk, df_ent, applied = inject_anomalies(
+        df_mov=df_mov, df_stk=df_stk, df_ent=df_ent
+    )
 
     df_bodega.to_csv(OUT / "md_bodega.csv", index=False)
     df_sku.to_csv(OUT / "md_sku.csv", index=False)
@@ -335,12 +605,25 @@ def main(argv: list[str] | None = None) -> None:
     print(f"md_bodega:              {len(df_bodega):>8,}")
     print(f"md_sku:                 {len(df_sku):>8,}")
     print(f"md_transportista:       {len(df_carrier):>8,}")
-    print(f"sap_wms_movimientos:    {len(df_mov):>8,}")
-    print(f"sap_wms_stock_snapshot: {len(df_stk):>8,}")
-    print(f"sap_tm_entregas:        {len(df_ent):>8,}")
+    print(
+        f"sap_wms_movimientos:    {len(df_mov):>8,}  "
+        f"(clean={n_mov_clean:,} +anomalies={len(df_mov) - n_mov_clean:,})"
+    )
+    print(
+        f"sap_wms_stock_snapshot: {len(df_stk):>8,}  "
+        f"(clean={n_stk_clean:,} +anomalies={len(df_stk) - n_stk_clean:,})"
+    )
+    print(
+        f"sap_tm_entregas:        {len(df_ent):>8,}  "
+        f"(clean={n_ent_clean:,} +anomalies={len(df_ent) - n_ent_clean:,}; "
+        f"status_casing in-place={applied['status_casing_entregas']})"
+    )
+    print("anomalies applied:")
+    for key in sorted(applied):
+        print(f"  {key}: {applied[key]}")
     print(f"out → {OUT}")
-    if len(df_mov) < 30_000:
-        raise SystemExit("ERROR: movimientos < 30k — sube target_mov_per_day o HORIZON_MONTHS")
+    if n_mov_clean < 30_000:
+        raise SystemExit("ERROR: movimientos limpios < 30k — sube target_mov_per_day o HORIZON_MONTHS")
 
 
 if __name__ == "__main__":

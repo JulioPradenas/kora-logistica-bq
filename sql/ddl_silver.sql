@@ -1,6 +1,6 @@
 -- KORA Deportes — Paso 4: DDL silver (entidades limpias, vacío).
 -- Dataset: silver_kora. Misma entidad que bronze; claves NOT NULL; estados canónicos.
--- Quarantine (filas rechazadas) → Paso 6 (calidad / rejects); no en este paso.
+-- Quarantine: silver_kora.quarantine_rows (Paso 6 — rejects con reason/payload).
 -- Hechos con fecha: fecha_id INT64 YYYYMMDD + integer-range (sandbox).
 -- Partición: RANGE_BUCKET mensuals (~interval 100) — ver docs/paso-04-ddl.md.
 -- CREATE TABLE IF NOT EXISTS (sandbox sin DML). Transforms = pasos posteriores.
@@ -91,4 +91,15 @@ PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
 CLUSTER BY warehouse_id, carrier_id
 OPTIONS(
   description="Silver: entregas limpias — integer-range en fecha_id — cluster carrier."
+);
+
+CREATE TABLE IF NOT EXISTS `silver_kora.quarantine_rows` (
+  source_table STRING NOT NULL OPTIONS(description="Entidad bronze de origen"),
+  natural_key STRING NOT NULL OPTIONS(description="PK lógica / clave natural"),
+  reason STRING NOT NULL OPTIONS(description="missing_fk_* | null_required_* | invalid_status | …"),
+  payload STRING OPTIONS(description="JSON snapshot de la fila rechazada"),
+  quarantine_ts TIMESTAMP NOT NULL
+)
+OPTIONS(
+  description="Quarantine silver (Paso 6): rejects de calidad; no drop silencioso. Lab KORA."
 );
