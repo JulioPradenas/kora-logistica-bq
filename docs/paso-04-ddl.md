@@ -72,7 +72,6 @@ Tablas de rechazo / quarantine **no** se crean aquí. Encajan mejor en Paso 6 (r
 
 ## Prerrequisitos en tu Mac
 
-- Paso 3 OK (datasets presentes) — o `make paso3` antes.
 - ADC: `gcloud auth application-default login`
 - `GCP_PROJECT=kora-sports` en `.env`
 - APIs BigQuery habilitadas
@@ -86,12 +85,14 @@ Desde la raíz del repo:
 ```bash
 cp -n .env.example .env    # GCP_PROJECT=kora-sports
 make setup                 # .venv + deps (idempotente)
-make paso4                 # dry-run → apply DDL → bq ls ×3 + bq show --schema
+make run                   # STAGES en orden: setup_bigquery → apply_ddl (dry-run→apply) + verify
+make run DRY=1             # solo dry-run de cada etapa
 make test                  # pytest sin GCP
 ```
 
-`make paso4` usa `PY=.venv/bin/python`, lee `GCP_PROJECT` de `.env` (default `kora-sports`) y **para** si el dry-run falla. No imprime secretos.  
-Equivalente manual abajo (mismo orden).
+`make run` es el **entrypoint estable**: lee `STAGES` en el Makefile (un solo lugar extensible), usa `PY=.venv/bin/python`, `GCP_PROJECT` desde `.env` (default `kora-sports`), y **para** si un dry-run/apply falla. No imprime secretos.  
+Re-run es seguro (scripts idempotentes). Futuro load/silver/gold = añadir una línea a `STAGES`.  
+Equivalente manual abajo.
 
 ---
 
@@ -116,7 +117,8 @@ cp -n .env.example .env
 
 ```bash
 python scripts/apply_ddl.py --dry-run
-# o: make -n paso4   # solo imprime el plan (útil en CI sin credenciales)
+# o: make -n run     # solo imprime el plan (útil en CI sin credenciales)
+# o: make run DRY=1  # dry-run real de cada stage (sí llama BQ dry_run; no crea)
 ```
 
 **Salida esperada (aprox., primera vez):**
@@ -173,14 +175,14 @@ pytest -q
 ```
 
 Mocks: contrato bronze vs DDL; facts gold con integer-range + cluster; runner dry-run / idempotencia.  
-CI corre `pytest` + `make -n paso4` (plan only; **sin** llamadas GCP).
+CI corre `pytest` + `make -n run` (plan only; **sin** llamadas GCP).
 
 ---
 
 ## Checklist
 
-- [ ] `make paso4` OK (o dry-run + apply manual)  
-- [ ] Re-run `make paso4` sin error (`exists`)  
+- [ ] `make run` OK (o dry-run + apply manual de cada stage)  
+- [ ] Re-run `make run` sin error (`exists`)  
 - [ ] `bq show --schema` coincide con contract / star  
 - [ ] Facts: integer-range + clustering  
 - [ ] `make test` / `pytest -q` verde  

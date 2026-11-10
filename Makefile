@@ -1,13 +1,16 @@
 # KORA Deportes — lab runners (Mac / laptop de Julio)
-# Uso: make paso3 | make paso4 | make test | make setup
-# Futuro: añadir make paso5, make paso6, … con el mismo patrón (setup → dry-run → apply → verify).
+# Uso: make setup | make run | make run DRY=1 | make test
+#
+# Un entrypoint estable (`make run`) ejecuta TODAS las etapas GCP en orden,
+# cada una dry-run → apply (idempotente). Futuros pasos = una línea en STAGES.
 #
 # Auth: ADC en la laptop. Nunca imprime secretos ni paths de SA keys.
-# CI: solo `make test` / `make -n paso4` (sin llamadas GCP reales).
+# CI: `make test` + `make -n run` (sin llamadas GCP reales).
 
 PY      ?= .venv/bin/python
 VENV    ?= .venv
 PIP     := $(PY) -m pip
+DRY     ?= 0
 
 # Proyecto GCP desde .env (solo GCP_PROJECT); default lab.
 # No hacemos `include .env` para no exportar GOOGLE_APPLICATION_CREDENTIALS u otros.
@@ -16,12 +19,24 @@ ifeq ($(strip $(GCP_PROJECT)),)
   GCP_PROJECT := kora-sports
 endif
 
-.PHONY: help setup test paso3 paso4
+# ---------------------------------------------------------------------------
+# STAGES — ÚNICO lugar extensible (orden = pipeline).
+# Hoy: datasets (Paso 3) → DDL vacío (Paso 4).
+# Futuro: añadir una línea, p.ej. scripts/load_bronze.py
+# ---------------------------------------------------------------------------
+STAGES := \
+	scripts/setup_bigquery.py \
+	scripts/apply_ddl.py
+#	scripts/load_bronze.py \
+#	scripts/transform_silver.py \
+#	scripts/build_gold.py
+
+.PHONY: help setup test run
 
 help:
-	@echo "Targets: setup | test | paso3 | paso4"
-	@echo "PY=$(PY)  GCP_PROJECT=$(GCP_PROJECT)"
-	@echo "Patrón futuro: make pasoN  (dry-run && apply && verify; depende de setup)"
+	@echo "Targets: setup | run | run DRY=1 | test"
+	@echo "PY=$(PY)  GCP_PROJECT=$(GCP_PROJECT)  DRY=$(DRY)"
+	@echo "STAGES=$(STAGES)"
 
 # Idempotente: crea .venv si falta e instala deps (requirements-dev → requirements).
 setup: $(VENV)/bin/python
@@ -34,23 +49,34 @@ $(VENV)/bin/python:
 test: setup
 	$(PY) -m pytest -q
 
-# Paso 3 — datasets medallón (dry-run → apply → bq ls). Para si dry-run falla (&&).
-paso3: setup
-	$(PY) scripts/setup_bigquery.py --dry-run
-	$(PY) scripts/setup_bigquery.py
-	bq ls --project_id=$(GCP_PROJECT)
-
-# Paso 4 — DDL vacío (dry-run → apply → list datasets + schema de un fact gold).
-paso4: setup
-	$(PY) scripts/apply_ddl.py --dry-run
-	$(PY) scripts/apply_ddl.py
-	bq ls --project_id=$(GCP_PROJECT) bronze_kora
-	bq ls --project_id=$(GCP_PROJECT) silver_kora
-	bq ls --project_id=$(GCP_PROJECT) gold_kora
-	bq show --schema --format=prettyjson $(GCP_PROJECT):gold_kora.f_movimientos_bodega
-
-# --- Plantilla futuros pasos (descomentar / copiar al implementar) ---
-# paso5: setup
-# 	$(PY) scripts/load_bronze.py --dry-run
-# 	$(PY) scripts/load_bronze.py
-# 	bq ls --project_id=$(GCP_PROJECT) bronze_kora
+# Pipeline completo: por cada stage → dry-run → (si DRY!=1) apply; luego verify + summary.
+# Para si cualquier dry-run/apply falla (set -e).
+run: setup
+	@set -e; \
+	n=0; \
+	for script in $(STAGES); do \
+	  n=$$((n+1)); \
+	  echo ""; \
+	  echo "==> [$$n] $$script --dry-run"; \
+	  $(PY) $$script --dry-run; \
+	  if [ "$(DRY)" = "1" ]; then \
+	    echo "    (DRY=1: skip apply)"; \
+	  else \
+	    echo "==> [$$n] $$script"; \
+	    $(PY) $$script; \
+	  fi; \
+	done; \
+	echo ""; \
+	if [ "$(DRY)" = "1" ]; then \
+	  echo "==> verify skipped (DRY=1)"; \
+	  echo "summary: stages=$$n mode=dry-only project=$(GCP_PROJECT) OK"; \
+	else \
+	  echo "==> verify: bq ls datasets + schema gold fact"; \
+	  bq ls --project_id=$(GCP_PROJECT); \
+	  bq ls --project_id=$(GCP_PROJECT) bronze_kora; \
+	  bq ls --project_id=$(GCP_PROJECT) silver_kora; \
+	  bq ls --project_id=$(GCP_PROJECT) gold_kora; \
+	  bq show --schema --format=prettyjson $(GCP_PROJECT):gold_kora.f_movimientos_bodega; \
+	  echo ""; \
+	  echo "summary: stages=$$n mode=apply+verify project=$(GCP_PROJECT) OK"; \
+	fi

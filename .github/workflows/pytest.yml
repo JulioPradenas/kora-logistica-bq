@@ -22,4 +22,4 @@ jobs:
         run: pytest -q
       # Sin credenciales GCP: solo planifica recetas (no ejecuta bq / apply).
       - name: Makefile dry-run plan (no GCP)
-        run: make -n paso4
+        run: make -n run

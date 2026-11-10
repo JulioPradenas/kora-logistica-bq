@@ -36,7 +36,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Demo partition/cluster (bytes) | ⏳ |
 | Looker Studio + one-page | ⏳ |
 
-## Setup rápido (Mac — un comando por paso)
+## Setup rápido (Mac — un entrypoint)
 
 ```bash
 cp -n .env.example .env                 # GCP_PROJECT=kora-sports
@@ -44,12 +44,12 @@ gcloud auth application-default login
 gcloud config set project kora-sports
 
 make setup                              # .venv + deps (idempotente)
-make paso3                              # datasets medallón (dry-run → apply → bq ls)
-make paso4                              # DDL vacío (dry-run → apply → bq show)
+make run                                # todas las etapas GCP (dry-run → apply) + verify
+make run DRY=1                          # solo dry-run de cada etapa (sin writes / sin bq)
 make test                               # pytest (mocks; sin GCP)
 ```
 
-Cada `make pasoN` hace dry-run → apply → verify; si el dry-run falla, `make` para.  
+`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL; futuro: load/transforms = una línea nueva). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + `bq show --schema` de un fact gold + summary.  
 `GCP_PROJECT` se lee de `.env` (default `kora-sports`); el Makefile no imprime secretos ni SA keys.
 
 Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md).  
