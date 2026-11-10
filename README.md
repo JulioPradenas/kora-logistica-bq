@@ -30,6 +30,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 |---|---|
 | Levantamiento de requerimientos | ✅ (este repo) |
 | Datos sintéticos + contrato | ✅ |
+| Datasets BQ medallón (`bronze`/`silver`/`gold`) | ✅ — `southamerica-west1` |
 | DDL + carga Python + transforms | ⏳ |
 | Demo partition/cluster | ⏳ |
 | Looker Studio + one-page | ⏳ |
@@ -44,11 +45,15 @@ python scripts/generate_synthetic.py   # regenera data/raw (seed 42, HORIZON_END
 cp .env.example .env
 gcloud auth application-default login
 gcloud config set project kora-sports
+python scripts/setup_bigquery.py --dry-run
+python scripts/setup_bigquery.py       # datasets bronze_kora / silver_kora / gold_kora
 ```
 
 Los CSV en `data/raw/` no se versionan; ver [data/README.md](data/README.md) (contrato + regeneración).
 
-Para tests locales del contrato/generador:
+Datasets BigQuery: location **`southamerica-west1`** (Santiago). Detalle y límites sandbox en [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md).
+
+Para tests locales (contrato/generador + setup BQ con mocks):
 
 ```bash
 pip install -r requirements-dev.txt
@@ -59,6 +64,7 @@ pytest
 
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
 - [Data contract (`data/README.md`)](data/README.md)
+- [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
 - Arquitectura, modelo dimensional y demo de bytes: TBD en pasos siguientes
 
 ## Disclaimer
