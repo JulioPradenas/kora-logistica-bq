@@ -36,33 +36,24 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Demo partition/cluster (bytes) | ⏳ |
 | Looker Studio + one-page | ⏳ |
 
-## Setup rápido (se completa en pasos posteriores)
+## Setup rápido (Mac — un comando por paso)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/generate_synthetic.py   # regenera data/raw (seed 42, HORIZON_END fijo 2026-10-31)
-cp .env.example .env
+cp -n .env.example .env                 # GCP_PROJECT=kora-sports
 gcloud auth application-default login
 gcloud config set project kora-sports
-python scripts/setup_bigquery.py --dry-run
-python scripts/setup_bigquery.py       # datasets bronze_kora / silver_kora / gold_kora
-python scripts/apply_ddl.py --dry-run
-python scripts/apply_ddl.py            # DDL vacío bronze/silver/gold (IF NOT EXISTS)
+
+make setup                              # .venv + deps (idempotente)
+make paso3                              # datasets medallón (dry-run → apply → bq ls)
+make paso4                              # DDL vacío (dry-run → apply → bq show)
+make test                               # pytest (mocks; sin GCP)
 ```
 
-Los CSV en `data/raw/` no se versionan; ver [data/README.md](data/README.md) (contrato + regeneración).
+Cada `make pasoN` hace dry-run → apply → verify; si el dry-run falla, `make` para.  
+`GCP_PROJECT` se lee de `.env` (default `kora-sports`); el Makefile no imprime secretos ni SA keys.
 
-Datasets BigQuery: location **`southamerica-west1`** (Santiago). Detalle y límites sandbox en [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md).  
-DDL (partición integer-range, sin DML, sin carga): [docs/paso-04-ddl.md](docs/paso-04-ddl.md).
-
-Para tests locales (contrato/generador + setup/DDL BQ con mocks):
-
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
+Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md).  
+CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
 
 ## Docs
 

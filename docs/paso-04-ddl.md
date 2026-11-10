@@ -72,14 +72,30 @@ Tablas de rechazo / quarantine **no** se crean aquí. Encajan mejor en Paso 6 (r
 
 ## Prerrequisitos en tu Mac
 
-- Paso 3 OK (datasets presentes).
+- Paso 3 OK (datasets presentes) — o `make paso3` antes.
 - ADC: `gcloud auth application-default login`
 - `GCP_PROJECT=kora-sports` en `.env`
 - APIs BigQuery habilitadas
 
 ---
 
-## Comandos exactos (Mac)
+## Un comando (recomendado)
+
+Desde la raíz del repo:
+
+```bash
+cp -n .env.example .env    # GCP_PROJECT=kora-sports
+make setup                 # .venv + deps (idempotente)
+make paso4                 # dry-run → apply DDL → bq ls ×3 + bq show --schema
+make test                  # pytest sin GCP
+```
+
+`make paso4` usa `PY=.venv/bin/python`, lee `GCP_PROJECT` de `.env` (default `kora-sports`) y **para** si el dry-run falla. No imprime secretos.  
+Equivalente manual abajo (mismo orden).
+
+---
+
+## Comandos exactos (Mac, manual)
 
 ```bash
 cd ~/projects/kora-logistica-bq   # ajusta tu ruta
@@ -100,6 +116,7 @@ cp -n .env.example .env
 
 ```bash
 python scripts/apply_ddl.py --dry-run
+# o: make -n paso4   # solo imprime el plan (útil en CI sin credenciales)
 ```
 
 **Salida esperada (aprox., primera vez):**
@@ -149,22 +166,24 @@ Esperado en facts: `rangePartitioning` / integer range sobre `fecha_id`; cluster
 ## Tests (sin GCP)
 
 ```bash
+make test
+# o:
 pytest tests/test_apply_ddl.py -q
 pytest -q
 ```
 
-Mocks: contrato bronze vs DDL; facts gold con integer-range + cluster; runner dry-run / idempotencia.
+Mocks: contrato bronze vs DDL; facts gold con integer-range + cluster; runner dry-run / idempotencia.  
+CI corre `pytest` + `make -n paso4` (plan only; **sin** llamadas GCP).
 
 ---
 
 ## Checklist
 
-- [ ] `--dry-run` OK  
-- [ ] `python scripts/apply_ddl.py` crea 19 tablas  
-- [ ] Re-run sin error (`exists`)  
+- [ ] `make paso4` OK (o dry-run + apply manual)  
+- [ ] Re-run `make paso4` sin error (`exists`)  
 - [ ] `bq show --schema` coincide con contract / star  
 - [ ] Facts: integer-range + clustering  
-- [ ] `pytest -q` verde  
+- [ ] `make test` / `pytest -q` verde  
 - [ ] **Aún no** hay filas cargadas (Paso 5)
 
 Cuando esté ✅ → Paso 5 (load) en un PR aparte.

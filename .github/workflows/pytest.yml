@@ -20,3 +20,6 @@ jobs:
           pip install -r requirements-dev.txt
       - name: Run pytest
         run: pytest -q
+      # Sin credenciales GCP: solo planifica recetas (no ejecuta bq / apply).
+      - name: Makefile dry-run plan (no GCP)
+        run: make -n paso4
