@@ -63,7 +63,8 @@ def test_sql_files_exist_ctas_no_dml_and_partition(build_gold):
         assert errs == [], errs
         if table.startswith("f_"):
             assert "PARTITION BY RANGE_BUCKET" in text
-            assert "GENERATE_ARRAY(20250401, 20261101, 100)" in text
+            assert "GENERATE_ARRAY(20250401, 20261201, 100)" in text
+            assert "GENERATE_ARRAY(20250401, 20261101, 100)" not in text
             assert "CLUSTER BY" in text
 
 
@@ -294,13 +295,16 @@ def test_makefile_n_run_includes_build_gold():
     out = proc.stdout + proc.stderr
     assert "scripts/transform_silver.py" in out
     assert "scripts/build_gold.py" in out
+    assert "scripts/demo_partition_prune.py" in out
     idx_silver = out.index("scripts/transform_silver.py")
     idx_gold = out.index("scripts/build_gold.py")
-    assert idx_silver < idx_gold
+    idx_demo = out.index("scripts/demo_partition_prune.py")
+    assert idx_silver < idx_gold < idx_demo
     mk = MAKEFILE.read_text(encoding="utf-8")
     assert "55548" in mk
     assert "583" in mk
     assert "gold_kora row counts" in mk
+    assert "__UNPARTITIONED__" in mk
 
 
 def test_f_entregas_flags_never_null_expression(build_gold):

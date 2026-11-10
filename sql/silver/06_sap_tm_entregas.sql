@@ -1,6 +1,6 @@
 -- Silver entregas: dedup shipment_id, status canónico (UPPER/TRIM + map), FK vs silver.
 CREATE OR REPLACE TABLE `silver_kora.sap_tm_entregas`
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, carrier_id
 AS
 WITH deduped AS (

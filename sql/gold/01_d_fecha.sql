@@ -1,8 +1,9 @@
 -- Dim fecha: calendario generado.
 -- Cubría el horizonte WMS 2025-04-01→2026-10-31; se extiende a 2026-11-04 porque
 -- f_entregas.fecha_id = delivery_date y el generador aplica tránsito 0–4 días
--- (seed 42 → 79 shipments en Nov 1–4). PARTITION facts sigue en
--- GENERATE_ARRAY(20250401, 20261101, 100): fecha_id ≥ 20261101 cae en el último bucket.
+-- (seed 42 → 79 shipments en Nov 1–4).
+-- Paso 8: facts usan GENERATE_ARRAY(20250401, 20261201, 100) — end exclusivo
+-- cubre Nov (con 20261101 esas filas caían en __UNPARTITIONED__). ver paso-08).
 CREATE OR REPLACE TABLE `gold_kora.d_fecha` AS
 SELECT
   CAST(FORMAT_DATE('%Y%m%d', d) AS INT64) AS fecha_id,

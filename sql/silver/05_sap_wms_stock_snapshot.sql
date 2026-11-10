@@ -1,6 +1,6 @@
 -- Silver stock: dedup (snapshot_date, warehouse_id, sku_id), usable_qty, FK vs silver.
 CREATE OR REPLACE TABLE `silver_kora.sap_wms_stock_snapshot`
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, sku_id
 AS
 WITH deduped AS (

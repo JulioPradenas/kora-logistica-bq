@@ -35,7 +35,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Carga bronze (CSV → load jobs) | ✅ — `WRITE_TRUNCATE` |
 | Transforms silver + quarantine | ✅ — CTAS + `quarantine_rows` |
 | Gold datamart (`dm_logistica_retail`) | ✅ — star + vistas OTIF/cycle/stock |
-| Demo partition/cluster (bytes) | ⏳ |
+| Demo partition/cluster (bytes) | ✅ — 108 buckets; prune dry_run stage 7 |
 | Looker Studio + one-page | ⏳ |
 
 ## Setup rápido (Mac — un entrypoint)
@@ -51,12 +51,27 @@ make run DRY=1                          # solo dry-run de cada etapa (sin writes
 make test                               # pytest (mocks; sin GCP)
 ```
 
-`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL → **generate CSV (siempre)** → **load bronze** → **transform silver** → **build gold**). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + **conteos bronze/silver/gold** + **quarantine by reason** + schema/partition de facts gold + summary.  
+`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL → **generate CSV (siempre)** → **load bronze** → **transform silver** → **build gold** → **demo partition prune**). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + **conteos bronze/silver/gold** + **quarantine by reason** + schema/partition + assert **0 filas** `__UNPARTITIONED__`/`__NULL__` + summary.  
 `GCP_PROJECT` se lee de `.env` (default `kora-sports`); el Makefile no imprime secretos ni SA keys.
 
-`data/raw/*.csv` está gitignored → `make run` regenera siempre con seed 42 (determinista; + anomalías Paso 6) antes del load.
+`data/raw/*.csv` está gitignored → `make run` regenera siempre con seed 42 (determinista; + anomalías Paso 6) antes del load. Si el partition-spec del DDL cambió, `apply_ddl` hace **DROP+CREATE** (seguro: los datos se regeneran en el mismo `make run`).
 
-Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md) · [docs/paso-06-silver.md](docs/paso-06-silver.md) · [docs/paso-07-gold.md](docs/paso-07-gold.md).  
+### Demo prune — resultados (`f_stock_diario`)
+
+Números reales de `make run` (Julio, ADC laptop; dry_run stage 7). **No inventados.**
+
+| Query | Filtro | `totalBytesProcessed` (dry_run) | % vs (a) |
+|---|---|---|---|
+| (a) | ninguno | 1 667 520 B (1.59 MiB) | 100% |
+| (b) | un mes `fecha_id` | 178 560 B (174.38 KiB) | 10.7% |
+| (c) | mes + `bodega_id` | 256 680 B (250.66 KiB) | 15.4% |
+| (c) real (opcional `--real-cluster`) | mes + `bodega_id` | _(correr en laptop; mín. ~10 MB facturados)_ | — |
+
+**Post-run del mismo `make run`:** 6 tablas recreadas a 108 buckets; `f_entregas` range end=`20261201`; **0** filas en `__UNPARTITIONED__`/`__NULL__`; gold counts 583/8/250/12/55548/208440/29803.
+
+**Por qué (c) > (b) en dry_run:** BigQuery factura **columnas leídas**. (c) añade `bodega_id` al SELECT/filtro → más bytes estimados. El dry_run estima a **nivel de partición** y **no acredita** el skip de bloques de clustering. El ahorro de `CLUSTER BY` solo aparece en bytes facturados de un **job real** (`--real-cluster`); además hay **mínimo ~10 MB** por query. Ver [docs/paso-08-pruning.md](docs/paso-08-pruning.md).
+
+Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md) · [docs/paso-06-silver.md](docs/paso-06-silver.md) · [docs/paso-07-gold.md](docs/paso-07-gold.md) · [docs/paso-08-pruning.md](docs/paso-08-pruning.md).  
 CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
 
 ## Docs
@@ -68,7 +83,8 @@ CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/
 - [Paso 5 — carga bronze (load jobs)](docs/paso-05-load-bronze.md)
 - [Paso 6 — transform silver + quarantine](docs/paso-06-silver.md)
 - [Paso 7 — gold datamart](docs/paso-07-gold.md)
-- Demo de bytes / Looker: TBD en pasos siguientes
+- [Paso 8 — partition prune + 108 buckets](docs/paso-08-pruning.md)
+- Looker Studio + one-page: TBD Paso 9
 
 ## Disclaimer
 

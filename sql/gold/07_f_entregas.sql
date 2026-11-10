@@ -2,7 +2,7 @@
 -- on_time / in_full: flags BOOL NOT NULL (DDL gold). Asunciones en docs/paso-07-gold.md.
 -- CTAS re-declara PARTITION / CLUSTER.
 CREATE OR REPLACE TABLE `gold_kora.f_entregas`
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY bodega_id, transportista_id
 AS
 WITH out_by_shipment AS (

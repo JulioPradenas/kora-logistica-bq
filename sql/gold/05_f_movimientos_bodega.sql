@@ -1,7 +1,7 @@
 -- Fact movimientos: grano día × bodega × SKU × movement_type.
 -- CTAS re-declara PARTITION / CLUSTER (Paso 4). Sandbox: sin DML.
 CREATE OR REPLACE TABLE `gold_kora.f_movimientos_bodega`
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY bodega_id, sku_id
 AS
 SELECT

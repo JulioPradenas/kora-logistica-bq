@@ -21,7 +21,7 @@ endif
 
 # ---------------------------------------------------------------------------
 # STAGES — ÚNICO lugar extensible (orden = pipeline).
-# datasets → DDL → CSV sintéticos → load bronze → transform silver → build gold.
+# datasets → DDL → CSV → bronze → silver → gold → demo partition prune.
 #
 # generate_synthetic: SIEMPRE (no if-missing). Justificación:
 #   - data/raw/*.csv está en .gitignore → no hay artefacto versionado.
@@ -34,7 +34,8 @@ STAGES := \
 	scripts/generate_synthetic.py \
 	scripts/load_bronze.py \
 	scripts/transform_silver.py \
-	scripts/build_gold.py
+	scripts/build_gold.py \
+	scripts/demo_partition_prune.py
 
 # Tablas bronze para verify de conteos (orden = load_bronze.BRONZE_TABLES).
 BRONZE_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
@@ -110,6 +111,9 @@ run: setup
 	  bq show --schema --format=prettyjson $(GCP_PROJECT):gold_kora.f_movimientos_bodega; \
 	  bq show --format=prettyjson $(GCP_PROJECT):gold_kora.f_entregas \
 	    | $(PY) -c "import json,sys; d=json.load(sys.stdin); rp=d.get('rangePartitioning') or {}; print(f\"  f_entregas rangePartitioning.field={rp.get('field')} range={rp.get('range')}\")"; \
+	  echo "==> INFORMATION_SCHEMA: expect 0 rows in __UNPARTITIONED__/__NULL__"; \
+	  bq query --project_id=$(GCP_PROJECT) --use_legacy_sql=false --format=pretty \
+	    "SELECT table_schema, table_name, partition_id, total_rows FROM \`$(GCP_PROJECT).silver_kora.INFORMATION_SCHEMA.PARTITIONS\` WHERE table_name IN ('sap_wms_movimientos','sap_wms_stock_snapshot','sap_tm_entregas') AND partition_id IN ('__UNPARTITIONED__','__NULL__') AND total_rows > 0 UNION ALL SELECT table_schema, table_name, partition_id, total_rows FROM \`$(GCP_PROJECT).gold_kora.INFORMATION_SCHEMA.PARTITIONS\` WHERE table_name IN ('f_movimientos_bodega','f_stock_diario','f_entregas') AND partition_id IN ('__UNPARTITIONED__','__NULL__') AND total_rows > 0"; \
 	  echo ""; \
 	  echo "summary: stages=$$n mode=apply+verify project=$(GCP_PROJECT) OK"; \
 	fi

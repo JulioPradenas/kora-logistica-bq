@@ -27,8 +27,10 @@ Julio: el sandbox aplica ~**60 días** de expiración por defecto a tablas/vista
 **Decisión:** facts gold (y hechos silver particionados) usan **`fecha_id` INT64 YYYYMMDD** con:
 
 ```sql
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 ```
+
+> **Paso 8:** end exclusivo `20261201` (108 buckets). El valor previo `20261101` (107) dejaba deliveries Nov en `__UNPARTITIONED__` — ver [paso-08-pruning.md](paso-08-pruning.md).
 
 ### Citas oficiales (verificación)
 
@@ -47,10 +49,11 @@ PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
 
 | Opción | `GENERATE_ARRAY` | ≈ partitions | ¿OK vs 10k? |
 |---|---|---|---|
-| Daily `interval=1` sobre YYYYMMDD | `(20250401, 20261101, 1)` | ~110 700 buckets en el espacio entero | **No** (>10 000) |
-| Monthly-ish `interval=100` | `(20250401, 20261101, 100)` | **107** | **Sí** |
+| Daily `interval=1` sobre YYYYMMDD | `(20250401, 20261201, 1)` | ~10 800 buckets en el espacio entero | **No** (>10 000? borderline; aún alto / frágil) |
+| Monthly-ish `interval=100` (Paso 4, stale) | `(20250401, 20261101, 100)` | **107** | Sí, pero Nov → `__UNPARTITIONED__` |
+| Monthly-ish `interval=100` (**Paso 8**) | `(20250401, 20261201, 100)` | **108** | **Sí** + cubre Nov |
 
-**Elegido: intervalo 100** (espaciado de mes en encoding `YYYYMMDD`). El span entero `YYYYMMDD` de 20250401→20261101 es 10 700 (daily >10k); `/100` = 107 buckets. Cubre el horizonte del contract (`2025-04-01`→`2026-10-31`); end exclusivo `20261101`.
+**Elegido: intervalo 100** (espaciado de mes en encoding `YYYYMMDD`). Span `20250401→20261201` = 10 800; `/100` = **108** buckets. End exclusivo `20261201` cubre WMS hasta Oct-2026 **y** deliveries Nov (lag 0–4d).
 
 **Prod con billing:** partición por `DATE` (`PARTITION BY event_date` / `delivery_date`) + `partition_expiration_days` NULL o retención larga; clustering igual (`bodega_id, sku_id`; entregas + `transportista_id`).
 
@@ -127,8 +130,8 @@ python scripts/apply_ddl.py --dry-run
 project=kora-sports
 location=southamerica-west1
 dry_run=True
-partition_range=RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
-partition_buckets=107 (limit 10000)
+partition_range=RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
+partition_buckets=108 (limit 10000)
   would_create  bronze_kora.md_bodega  ok
   ...
   would_create  gold_kora.f_entregas  ok

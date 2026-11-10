@@ -33,7 +33,7 @@ Construir el **datamart único** `dm_logistica_retail` (conceptual) como tablas/
 **Causa confirmada (seed 42):** `f_entregas.fecha_id` = `delivery_date` YYYYMMDD. El generador pone tránsito **0–4 días** sobre `ship_date` ≤ `2026-10-31` → **79** shipments con `delivery_date` ∈ **2026-11-01..04**. `d_fecha` solo iba hasta `2026-10-31` (579 días) → FK huérfana. Movimientos/stock no se pasan del horizonte WMS.
 
 **Decisión (diff mínimo):** ampliar `d_fecha` a **`2025-04-01`→`2026-11-04`** (583 días). Se mantiene el grano del levantamiento (día de entrega/intento), no se redefine a `ship_date`.  
-`PARTITION BY RANGE_BUCKET(..., GENERATE_ARRAY(20250401, 20261101, 100))` **sin cambio**: `fecha_id ≥ 20261101` cae en el último bucket (documentado; Nov corto no exige nuevo `GENERATE_ARRAY`).
+`PARTITION BY RANGE_BUCKET` en Paso 7 quedó en `GENERATE_ARRAY(20250401, 20261101, 100)`. **Corrección Paso 8:** ese end exclusivo **no** mete `fecha_id ≥ 20261101` en el último bucket — van a `__UNPARTITIONED__`. Se amplía a `20261201` (108 buckets); ver [paso-08-pruning.md](paso-08-pruning.md).
 
 **No elegido:** cambiar `fecha_id` a `ship_date` — rompería el grano acordado (§7) y el OTIF “por día de entrega”.
 
