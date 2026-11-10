@@ -16,6 +16,10 @@ Sandbox:
   - Sin DML → CREATE TABLE IF NOT EXISTS (DDL en sql/ddl_*.sql) + ALTER DDL.
   - Paso 6: bronze es landing NULLABLE; tablas ya creadas con NOT NULL se
     relajan con ALTER TABLE … ALTER COLUMN … DROP NOT NULL (idempotente).
+  - Paso 7: gold DDL es el contrato; tablas ya creadas (Paso 4) reciben
+    ALTER TABLE … ADD COLUMN IF NOT EXISTS para columnas nuevas (p. ej.
+    on_time/in_full). Así el dry-run de vistas ve el schema correcto
+    antes del CTAS 07 (CREATE IF NOT EXISTS no altera tablas existentes).
   - Cargas posteriores: CREATE OR REPLACE TABLE AS SELECT / load jobs (Pasos 5+).
   - dry-run usa QueryJobConfig(dry_run=True) para validar SQL sin crear.
 
@@ -114,6 +118,15 @@ GOLD_FACT_TABLES: tuple[str, ...] = (
     "f_stock_diario",
     "f_entregas",
 )
+
+GOLD_DIM_TABLES: tuple[str, ...] = (
+    "d_fecha",
+    "d_bodega",
+    "d_sku",
+    "d_transportista",
+)
+
+GOLD_TABLES: tuple[str, ...] = GOLD_DIM_TABLES + GOLD_FACT_TABLES
 
 
 @dataclass(frozen=True)
@@ -405,6 +418,134 @@ def bronze_drop_not_null_sql(project_id: str, table_id: str, column: str) -> str
     )
 
 
+def _extract_dataset_columns_from_sql(
+    sql_text: str, *, dataset: str
+) -> dict[str, list[tuple[str, str]]]:
+    """Parser genérico dataset.table → [(col, type), ...] (mismo subset de tipos)."""
+    # Reusa el extractor bronze reescribiendo el dataset en el FQN.
+    rewritten = re.sub(
+        rf"`{re.escape(dataset)}\.",
+        "`bronze_kora.",
+        sql_text,
+        flags=re.IGNORECASE,
+    )
+    return extract_bronze_columns_from_sql(rewritten)
+
+
+def extract_gold_columns_from_sql(
+    sql_text: str | None = None,
+) -> dict[str, list[tuple[str, str]]]:
+    """
+    Extrae (columna, tipo) por tabla gold desde ddl_gold.sql.
+    Contrato Paso 7: estas columnas deben existir en BQ antes del dry-run de vistas.
+    """
+    text = sql_text
+    if text is None:
+        text = (SQL_DIR / "ddl_gold.sql").read_text(encoding="utf-8")
+    return _extract_dataset_columns_from_sql(text, dataset="gold_kora")
+
+
+def gold_add_column_sql(
+    project_id: str, table_id: str, column: str, col_type: str
+) -> str:
+    """
+    DDL: añade columna faltante en gold existente (sandbox OK).
+    Tipo NULLABLE en ALTER: suficiente para que el dry-run de vistas resuelva
+    el nombre; el CTAS CREATE OR REPLACE aplica el modo REQUIRED final del DDL.
+    """
+    return (
+        f"ALTER TABLE `{project_id}.gold_kora.{table_id}` "
+        f"ADD COLUMN IF NOT EXISTS `{column}` {col_type}"
+    )
+
+
+def sync_gold_schema(
+    client,
+    *,
+    project_id: str,
+    dry_run: bool = False,
+    ddl_text: str | None = None,
+    tables: tuple[str, ...] | None = None,
+) -> list[ApplyResult]:
+    """
+    Idempotente: para cada tabla gold existente, ADD COLUMN IF NOT EXISTS
+    de columnas declaradas en ddl_gold.sql que aún no están en el schema BQ.
+
+    Motivo (Paso 7 / Julio make run): CREATE TABLE IF NOT EXISTS no muta tablas
+    Paso 4; el dry-run de v_otif_diario / v_cycle_time valida contra el schema
+    *existente* (sin on_time/in_full), no contra el CTAS 07 que corre después.
+    """
+    from google.api_core.exceptions import NotFound
+
+    text = ddl_text
+    if text is None:
+        text = (SQL_DIR / "ddl_gold.sql").read_text(encoding="utf-8")
+    expected = _extract_dataset_columns_from_sql(text, dataset="gold_kora")
+    target_tables = tables if tables is not None else tuple(expected.keys())
+    results: list[ApplyResult] = []
+
+    for table_id in target_tables:
+        table_fqn = f"gold_kora.{table_id}"
+        full = f"{project_id}.{table_fqn}"
+        try:
+            table = client.get_table(full)
+        except NotFound:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_skip" if dry_run else "skipped",
+                    detail="table missing — CREATE runs first",
+                )
+            )
+            continue
+        except Exception as exc:  # noqa: BLE001
+            results.append(
+                ApplyResult(table_fqn=table_fqn, action="error", detail=str(exc))
+            )
+            continue
+
+        existing = {getattr(f, "name", "") for f in (table.schema or [])}
+        want = expected.get(table_id, [])
+        missing = [(name, typ) for name, typ in want if name not in existing]
+        if not missing:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_skip" if dry_run else "schema_ok",
+                    detail="gold columns match ddl_gold.sql",
+                )
+            )
+            continue
+
+        altered: list[str] = []
+        failed: list[str] = []
+        for col, typ in missing:
+            sql = gold_add_column_sql(project_id, table_id, col, typ)
+            try:
+                run_ddl_job(client, sql, dry_run=dry_run)
+                altered.append(col)
+            except Exception as exc:  # noqa: BLE001
+                failed.append(f"{col}:{exc}")
+
+        if failed:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="error",
+                    detail=f"ADD COLUMN failed: {'; '.join(failed)}",
+                )
+            )
+        else:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_add_columns" if dry_run else "added_columns",
+                    detail=f"ADD COLUMN IF NOT EXISTS → {', '.join(altered)}",
+                )
+            )
+    return results
+
+
 def required_field_names(schema) -> list[str]:
     """Nombres de campos con mode REQUIRED (API BigQuery)."""
     out: list[str] = []
@@ -551,16 +692,32 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
         if result.action == "error":
             errors += 1
 
+    # Paso 7: alinear gold existente al contrato ddl_gold (ADD COLUMN IF NOT EXISTS).
+    print("==> sync gold schema (ALTER ADD COLUMN IF NOT EXISTS)")
+    sync_results = sync_gold_schema(
+        bq_client, project_id=project, dry_run=dry_run
+    )
+    for result in sync_results:
+        results.append(result)
+        print(f"  {result.action:12}  {result.table_fqn}  {result.detail}")
+        if result.action == "error":
+            errors += 1
+
     created = sum(1 for r in results if r.action in {"created", "would_create"})
     skipped = sum(
         1
         for r in results
-        if r.action in {"exists", "would_skip", "skipped", "nullable_ok"}
+        if r.action
+        in {"exists", "would_skip", "skipped", "nullable_ok", "schema_ok"}
     )
     relaxed = sum(1 for r in results if r.action in {"relaxed", "would_relax"})
+    added = sum(
+        1 for r in results if r.action in {"added_columns", "would_add_columns"}
+    )
     print(
         f"summary: tables={len(statements)} created_or_planned={created} "
-        f"skipped={skipped} relaxed={relaxed} errors={errors}"
+        f"skipped={skipped} relaxed={relaxed} gold_columns_added={added} "
+        f"errors={errors}"
     )
 
     if dry_run:
@@ -572,7 +729,8 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
         return 1
     print(
         "OK: DDL bronze/silver/gold aplicado; bronze NULLABLE "
-        "(CREATE IF NOT EXISTS + ALTER DROP NOT NULL)."
+        "(ALTER DROP NOT NULL); gold schema synced "
+        "(ALTER ADD COLUMN IF NOT EXISTS)."
     )
     return 0
 

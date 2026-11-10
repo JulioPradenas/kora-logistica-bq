@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `gold_kora.d_fecha` (
   es_fin_de_semana BOOL NOT NULL
 )
 OPTIONS(
-  description="Dim fecha del datamart. Lab KORA — horizonte 2025-04-01→2026-10-31."
+  description="Dim fecha del datamart. Lab KORA — 2025-04-01→2026-11-04 (WMS + lag entrega ≤4d)."
 );
 
 CREATE TABLE IF NOT EXISTS `gold_kora.d_bodega` (
@@ -97,7 +97,9 @@ CREATE TABLE IF NOT EXISTS `gold_kora.f_entregas` (
   eta_ts DATETIME NOT NULL,
   ata_ts DATETIME,
   status STRING NOT NULL OPTIONS(description="delivered | late_delivered | failed | in_transit"),
-  qty_delivered INT64 NOT NULL
+  qty_delivered INT64 NOT NULL,
+  on_time BOOL NOT NULL OPTIONS(description="ATA IS NOT NULL AND ATA <= ETA"),
+  in_full BOOL NOT NULL OPTIONS(description="qty_delivered >= qty_ordered WMS OUT (shipment_id); FALSE si sin puente")
 )
 PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
 CLUSTER BY bodega_id, transportista_id

@@ -21,7 +21,7 @@ endif
 
 # ---------------------------------------------------------------------------
 # STAGES — ÚNICO lugar extensible (orden = pipeline).
-# datasets → DDL → CSV sintéticos → load bronze → transform silver (Paso 6).
+# datasets → DDL → CSV sintéticos → load bronze → transform silver → build gold.
 #
 # generate_synthetic: SIEMPRE (no if-missing). Justificación:
 #   - data/raw/*.csv está en .gitignore → no hay artefacto versionado.
@@ -33,12 +33,16 @@ STAGES := \
 	scripts/apply_ddl.py \
 	scripts/generate_synthetic.py \
 	scripts/load_bronze.py \
-	scripts/transform_silver.py
-#	scripts/build_gold.py
+	scripts/transform_silver.py \
+	scripts/build_gold.py
 
 # Tablas bronze para verify de conteos (orden = load_bronze.BRONZE_TABLES).
 BRONZE_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
 SILVER_TABLES := md_bodega md_sku md_transportista sap_wms_movimientos sap_wms_stock_snapshot sap_tm_entregas
+GOLD_DIMS := d_fecha d_bodega d_sku d_transportista
+GOLD_FACTS := f_movimientos_bodega f_stock_diario f_entregas
+# seed 42: 583/8/250/12/55548/208440/29803 (d_fecha +4d lag entrega → 2026-11-04)
+GOLD_EXPECTED := 583 8 250 12 55548 208440 29803
 
 .PHONY: help setup test run
 
@@ -80,7 +84,7 @@ run: setup
 	  echo "==> verify skipped (DRY=1)"; \
 	  echo "summary: stages=$$n mode=dry-only project=$(GCP_PROJECT) OK"; \
 	else \
-	  echo "==> verify: bq ls datasets + bronze/silver counts + quarantine by reason"; \
+	  echo "==> verify: bq ls datasets + bronze/silver/gold counts + quarantine by reason"; \
 	  bq ls --project_id=$(GCP_PROJECT); \
 	  bq ls --project_id=$(GCP_PROJECT) bronze_kora; \
 	  bq ls --project_id=$(GCP_PROJECT) silver_kora; \
@@ -98,7 +102,14 @@ run: setup
 	  echo "==> quarantine_rows by reason"; \
 	  bq query --project_id=$(GCP_PROJECT) --use_legacy_sql=false --format=pretty \
 	    "SELECT reason, COUNT(*) AS n FROM \`$(GCP_PROJECT).silver_kora.quarantine_rows\` GROUP BY reason ORDER BY reason"; \
+	  echo "==> gold_kora row counts (expect 583/8/250/12/55548/208440/29803)"; \
+	  for t in $(GOLD_DIMS) $(GOLD_FACTS); do \
+	    bq show --format=prettyjson $(GCP_PROJECT):gold_kora.$$t \
+	      | $(PY) -c "import json,sys; d=json.load(sys.stdin); print(f\"  gold_kora.$$t  num_rows={d.get('numRows')}\")"; \
+	  done; \
 	  bq show --schema --format=prettyjson $(GCP_PROJECT):gold_kora.f_movimientos_bodega; \
+	  bq show --format=prettyjson $(GCP_PROJECT):gold_kora.f_entregas \
+	    | $(PY) -c "import json,sys; d=json.load(sys.stdin); rp=d.get('rangePartitioning') or {}; print(f\"  f_entregas rangePartitioning.field={rp.get('field')} range={rp.get('range')}\")"; \
 	  echo ""; \
 	  echo "summary: stages=$$n mode=apply+verify project=$(GCP_PROJECT) OK"; \
 	fi
