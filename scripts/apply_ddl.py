@@ -20,11 +20,15 @@ Sandbox:
     ALTER TABLE … ADD COLUMN IF NOT EXISTS para columnas nuevas (p. ej.
     on_time/in_full). Así el dry-run de vistas ve el schema correcto
     antes del CTAS 07 (CREATE IF NOT EXISTS no altera tablas existentes).
+  - Paso 8: si el RANGE_BUCKET / GENERATE_ARRAY del DDL difiere del de la
+    tabla BQ existente → DROP + CREATE (recreate idempotente). Seguro
+    porque make run regenera CSV → bronze load → silver/gold CTAS.
   - Cargas posteriores: CREATE OR REPLACE TABLE AS SELECT / load jobs (Pasos 5+).
   - dry-run usa QueryJobConfig(dry_run=True) para validar SQL sin crear.
 
 Partición (facts silver/gold): integer-range en fecha_id YYYYMMDD, intervalo 100
-(≈ mensual). Justificación y citas oficiales: docs/paso-04-ddl.md.
+(≈ mensual). End exclusivo 20261201 → 108 buckets (cubre Nov deliveries;
+20261101 dejaba fecha_id≥20261101 en __UNPARTITIONED__). Ver docs/paso-08-pruning.md.
 """
 from __future__ import annotations
 
@@ -43,11 +47,13 @@ SQL_DIR = ROOT / "sql"
 # Misma región del lab (datasets ya creados en Paso 3).
 BQ_LOCATION = "southamerica-west1"
 
-# Horizonte lab (data contract): 2025-04-01 → 2026-10-31.
+# Horizonte lab: WMS 2025-04-01→2026-10-31 + deliveries Nov (lag 0–4d).
 # GENERATE_ARRAY end es exclusivo; interval 100 ≈ mes en encoding YYYYMMDD.
+# 20261201 (no 20261101): Nov 2026-11-01..04 debe caer en rango, no __UNPARTITIONED__.
 FECHA_ID_START = 20250401
-FECHA_ID_END_EXCLUSIVE = 20261101
+FECHA_ID_END_EXCLUSIVE = 20261201
 FECHA_ID_INTERVAL = 100  # mensual; daily (1) → >10k partitions (cuota BQ)
+EXPECTED_PARTITION_BUCKETS = 108
 
 DDL_FILES: tuple[str, ...] = (
     "ddl_bronze.sql",
@@ -139,7 +145,7 @@ class StatementSpec:
 @dataclass(frozen=True)
 class ApplyResult:
     table_fqn: str
-    action: str  # created | exists | would_create | would_skip | error
+    action: str  # created | exists | recreated | would_create | would_skip | would_recreate | error | …
     detail: str = ""
 
 
@@ -354,6 +360,67 @@ def partition_count(start: int, end_exclusive: int, interval: int) -> int:
     return (span + interval - 1) // interval if span % interval else span // interval
 
 
+def fecha_id_generate_array_sql(
+    start: int = FECHA_ID_START,
+    end_exclusive: int = FECHA_ID_END_EXCLUSIVE,
+    interval: int = FECHA_ID_INTERVAL,
+) -> str:
+    """Snippet canónico GENERATE_ARRAY(...) para facts particionados."""
+    return f"GENERATE_ARRAY({start}, {end_exclusive}, {interval})"
+
+
+_GENERATE_ARRAY_RE = re.compile(
+    r"GENERATE_ARRAY\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)",
+    re.IGNORECASE,
+)
+
+
+def expected_range_from_sql(sql: str) -> tuple[int, int, int] | None:
+    """
+    Extrae (start, end_exclusive, interval) del PARTITION BY RANGE_BUCKET
+    en un CREATE. None si la tabla no declara integer-range.
+    """
+    if not re.search(r"PARTITION\s+BY\s+RANGE_BUCKET", sql, re.IGNORECASE):
+        return None
+    m = _GENERATE_ARRAY_RE.search(sql)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2)), int(m.group(3))
+
+
+def actual_range_from_table(table) -> tuple[int, int, int] | None:
+    """
+    Lee range_partitioning de un Table BQ → (start, end, interval).
+    None si la tabla no está integer-range partitioned.
+    """
+    rp = getattr(table, "range_partitioning", None)
+    if rp is None:
+        return None
+    rng = getattr(rp, "range_", None)
+    if rng is None:
+        rng = getattr(rp, "range", None)
+    if rng is None:
+        return None
+    try:
+        return int(rng.start), int(rng.end), int(rng.interval)
+    except (TypeError, AttributeError, ValueError):
+        return None
+
+
+def partition_spec_mismatch(table, sql: str) -> bool:
+    """
+    True si el DDL exige integer-range y el de la tabla BQ no coincide
+    (o la tabla no está particionada). Tablas sin PARTITION en DDL → False.
+    """
+    expected = expected_range_from_sql(sql)
+    if expected is None:
+        return False
+    actual = actual_range_from_table(table)
+    if actual is None:
+        return True
+    return actual != expected
+
+
 def table_exists(client, project_id: str, table_fqn: str) -> bool:
     from google.api_core.exceptions import NotFound
 
@@ -363,6 +430,22 @@ def table_exists(client, project_id: str, table_fqn: str) -> bool:
         return True
     except NotFound:
         return False
+
+
+def get_table(client, project_id: str, table_fqn: str):
+    """Devuelve Table o None si no existe."""
+    from google.api_core.exceptions import NotFound
+
+    full = f"{project_id}.{table_fqn}"
+    try:
+        return client.get_table(full)
+    except NotFound:
+        return None
+
+
+def drop_table_sql(project_id: str, table_fqn: str) -> str:
+    """DDL DROP TABLE IF EXISTS (recreate ante cambio de partition-spec)."""
+    return f"DROP TABLE IF EXISTS `{project_id}.{table_fqn}`"
 
 
 def run_ddl_job(client, sql: str, *, dry_run: bool) -> None:
@@ -385,9 +468,45 @@ def apply_statement(
     spec: StatementSpec,
     dry_run: bool = False,
 ) -> ApplyResult:
-    """Aplica un CREATE TABLE IF NOT EXISTS con reporte por tabla."""
-    exists = table_exists(client, project_id, spec.table_fqn)
-    if exists:
+    """
+    Aplica CREATE TABLE IF NOT EXISTS.
+    Paso 8: si existe y el partition-spec (RANGE_BUCKET/GENERATE_ARRAY) difiere
+    del DDL → DROP + CREATE (recreate). Seguro: make run regenera datos
+    (CSV → bronze load → silver/gold CTAS).
+    """
+    table = get_table(client, project_id, spec.table_fqn)
+    if table is not None:
+        if partition_spec_mismatch(table, spec.sql):
+            expected = expected_range_from_sql(spec.sql)
+            actual = actual_range_from_table(table)
+            detail = (
+                f"partition-spec change: bq={actual} ddl={expected}; "
+                "DROP+CREATE (data regenerates on make run)"
+            )
+            if dry_run:
+                return ApplyResult(
+                    table_fqn=spec.table_fqn,
+                    action="would_recreate",
+                    detail=detail,
+                )
+            try:
+                run_ddl_job(
+                    client,
+                    drop_table_sql(project_id, spec.table_fqn),
+                    dry_run=False,
+                )
+                run_ddl_job(client, spec.sql, dry_run=False)
+            except Exception as exc:  # noqa: BLE001
+                return ApplyResult(
+                    table_fqn=spec.table_fqn,
+                    action="error",
+                    detail=f"recreate failed: {exc}",
+                )
+            return ApplyResult(
+                table_fqn=spec.table_fqn,
+                action="recreated",
+                detail=detail,
+            )
         return ApplyResult(
             table_fqn=spec.table_fqn,
             action="would_skip" if dry_run else "exists",
@@ -652,6 +771,72 @@ def bronze_ddl_has_not_null(sql_text: str | None = None) -> bool:
     return bool(re.search(r"\bNOT\s+NULL\b", body, flags=re.IGNORECASE))
 
 
+# Facts particionados (silver + gold) sujetos a check __UNPARTITIONED__/__NULL__.
+PARTITIONED_FACT_TABLES: tuple[tuple[str, str], ...] = (
+    ("silver_kora", "sap_wms_movimientos"),
+    ("silver_kora", "sap_wms_stock_snapshot"),
+    ("silver_kora", "sap_tm_entregas"),
+    ("gold_kora", "f_movimientos_bodega"),
+    ("gold_kora", "f_stock_diario"),
+    ("gold_kora", "f_entregas"),
+)
+
+
+def unpartitioned_rows_sql(
+    project_id: str,
+    tables: tuple[tuple[str, str], ...] | None = None,
+) -> str:
+    """
+    INFORMATION_SCHEMA.PARTITIONS: filas en __UNPARTITIONED__ / __NULL__.
+    Debe devolver 0 filas con total_rows > 0 tras make run (Paso 8).
+    """
+    targets = tables if tables is not None else PARTITIONED_FACT_TABLES
+    # Un UNION ALL por dataset para evitar escanear todo el proyecto.
+    by_dataset: dict[str, list[str]] = {}
+    for dataset, table in targets:
+        by_dataset.setdefault(dataset, []).append(table)
+    parts: list[str] = []
+    for dataset, table_names in by_dataset.items():
+        in_list = ", ".join(f"'{t}'" for t in table_names)
+        parts.append(
+            f"""
+SELECT
+  table_schema,
+  table_name,
+  partition_id,
+  total_rows
+FROM `{project_id}.{dataset}.INFORMATION_SCHEMA.PARTITIONS`
+WHERE table_name IN ({in_list})
+  AND partition_id IN ('__UNPARTITIONED__', '__NULL__')
+  AND total_rows > 0
+""".strip()
+        )
+    return "\nUNION ALL\n".join(parts)
+
+
+def check_no_unpartitioned_rows(
+    client,
+    *,
+    project_id: str,
+    dry_run: bool = False,
+) -> tuple[int, list[dict]]:
+    """
+    Post-run: falla si alguna fact particionada tiene filas en
+    __UNPARTITIONED__ o __NULL__. Retorna (n_bad_partitions, rows).
+    dry_run: solo valida el SQL (QueryJobConfig dry_run); retorna (0, []).
+    """
+    from google.cloud import bigquery
+
+    sql = unpartitioned_rows_sql(project_id)
+    job_config = bigquery.QueryJobConfig(dry_run=dry_run, use_legacy_sql=False)
+    job = client.query(sql, job_config=job_config, location=BQ_LOCATION)
+    if dry_run:
+        _ = job.total_bytes_processed
+        return 0, []
+    rows = [dict(r) for r in job.result()]
+    return len(rows), rows
+
+
 def run(*, dry_run: bool = False, project_id: str | None = None, client=None) -> int:
     project = project_id or load_project_id()
     print(f"project={project}")
@@ -704,6 +889,9 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
             errors += 1
 
     created = sum(1 for r in results if r.action in {"created", "would_create"})
+    recreated = sum(
+        1 for r in results if r.action in {"recreated", "would_recreate"}
+    )
     skipped = sum(
         1
         for r in results
@@ -716,12 +904,15 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
     )
     print(
         f"summary: tables={len(statements)} created_or_planned={created} "
-        f"skipped={skipped} relaxed={relaxed} gold_columns_added={added} "
-        f"errors={errors}"
+        f"recreated={recreated} skipped={skipped} relaxed={relaxed} "
+        f"gold_columns_added={added} errors={errors}"
     )
 
     if dry_run:
-        print("dry-run: validación BigQuery job dry_run; no se crearon/alteraron tablas.")
+        print(
+            "dry-run: validación BigQuery job dry_run; "
+            "no se crearon/alteraron/recrearon tablas."
+        )
         return 1 if errors else 0
 
     if errors:
@@ -730,7 +921,9 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
     print(
         "OK: DDL bronze/silver/gold aplicado; bronze NULLABLE "
         "(ALTER DROP NOT NULL); gold schema synced "
-        "(ALTER ADD COLUMN IF NOT EXISTS)."
+        "(ALTER ADD COLUMN IF NOT EXISTS); "
+        "partition-spec recreate si cambió RANGE_BUCKET "
+        "(seguro: make run regenera datos)."
     )
     return 0
 

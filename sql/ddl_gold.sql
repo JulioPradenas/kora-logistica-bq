@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS `gold_kora.f_movimientos_bodega` (
   qty_ordered INT64 OPTIONS(description="Suma qty_ordered cuando aplica"),
   n_movimientos INT64 NOT NULL OPTIONS(description="Conteo de movimientos en el grano")
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY bodega_id, sku_id
 OPTIONS(
   description="Fact: warehouse×sku×movement_type×día. Integer-range mensual en fecha_id."
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `gold_kora.f_stock_diario` (
   reserved_qty INT64 NOT NULL,
   usable_qty INT64 NOT NULL OPTIONS(description="on_hand - reserved")
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY bodega_id, sku_id
 OPTIONS(
   description="Fact: stock diario warehouse×sku×día. Integer-range mensual en fecha_id."
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS `gold_kora.f_entregas` (
   on_time BOOL NOT NULL OPTIONS(description="ATA IS NOT NULL AND ATA <= ETA"),
   in_full BOOL NOT NULL OPTIONS(description="qty_delivered >= qty_ordered WMS OUT (shipment_id); FALSE si sin puente")
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY bodega_id, transportista_id
 OPTIONS(
   description="Fact: 1 shipment × día entrega/intento. Integer-range — cluster transportista."

@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS `silver_kora.sap_wms_movimientos` (
   pick_start_ts DATETIME,
   pick_end_ts DATETIME
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, sku_id
 OPTIONS(
   description="Silver: movimientos limpios — integer-range en fecha_id (mensual YYYYMMDD)."
@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS `silver_kora.sap_wms_stock_snapshot` (
   reserved_qty INT64 NOT NULL,
   usable_qty INT64 NOT NULL OPTIONS(description="on_hand_qty - reserved_qty (regla lab)")
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, sku_id
 OPTIONS(
   description="Silver: stock diario limpio — integer-range en fecha_id."
@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `silver_kora.sap_tm_entregas` (
   status STRING NOT NULL OPTIONS(description="Canónico: delivered | late_delivered | failed | in_transit"),
   qty_delivered INT64 NOT NULL
 )
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, carrier_id
 OPTIONS(
   description="Silver: entregas limpias — integer-range en fecha_id — cluster carrier."

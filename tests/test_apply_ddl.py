@@ -39,16 +39,24 @@ def test_partition_constants_under_10k(apply_ddl):
         apply_ddl.FECHA_ID_INTERVAL,
     )
     assert apply_ddl.FECHA_ID_INTERVAL == 100
-    # YYYYMMDD span 20250401→20261101 = 10700; /100 = 107 buckets.
-    assert n == 107
+    # Paso 8: end exclusivo 20261201 (no 20261101) → Nov deliveries in-range.
+    # YYYYMMDD span 20250401→20261201 = 10800; /100 = 108 buckets.
+    assert apply_ddl.FECHA_ID_END_EXCLUSIVE == 20261201
+    assert n == 108
+    assert n == apply_ddl.EXPECTED_PARTITION_BUCKETS
     assert n <= 10_000
+    # Regresión: el rango viejo 20261101 producía 107 buckets y dejaba Nov
+    # en __UNPARTITIONED__ — este test DEBE fallar si alguien revierte el end.
+    old_107 = apply_ddl.partition_count(20250401, 20261101, 100)
+    assert old_107 == 107
+    assert n != old_107
     # Daily interval=1 on YYYYMMDD integer space exceeds the 10k quota.
     daily = apply_ddl.partition_count(
         apply_ddl.FECHA_ID_START,
         apply_ddl.FECHA_ID_END_EXCLUSIVE,
         1,
     )
-    assert daily == 10_700
+    assert daily == 10_800
     assert daily > 10_000
 
 
@@ -397,7 +405,8 @@ def test_silver_facts_also_integer_range(apply_ddl):
     ):
         assert "RANGE_BUCKET(fecha_id" in sql
         assert f"`silver_kora.{table}`" in sql
-    assert "GENERATE_ARRAY(20250401, 20261101, 100)" in sql
+    assert "GENERATE_ARRAY(20250401, 20261201, 100)" in sql
+    assert "GENERATE_ARRAY(20250401, 20261101, 100)" not in sql
     # Paso 6: quarantine_rows en DDL silver (shape vacío; CTAS la llena).
     assert "CREATE TABLE" in sql.upper()
     assert any(
@@ -405,3 +414,167 @@ def test_silver_facts_also_integer_range(apply_ddl):
         for spec in apply_ddl.load_all_statements(SQL_DIR)
         if spec.layer == "silver"
     )
+
+
+def test_all_partitioned_ddl_uses_108_bucket_array(apply_ddl):
+    """Falla si algún fact DDL/CTAS sigue en end 20261101 (107 buckets)."""
+    snippet_new = apply_ddl.fecha_id_generate_array_sql()
+    assert snippet_new == "GENERATE_ARRAY(20250401, 20261201, 100)"
+    stale = "GENERATE_ARRAY(20250401, 20261101, 100)"
+    paths = [
+        SQL_DIR / "ddl_silver.sql",
+        SQL_DIR / "ddl_gold.sql",
+        *[SQL_DIR / "silver" / f for f in (
+            "04_sap_wms_movimientos.sql",
+            "05_sap_wms_stock_snapshot.sql",
+            "06_sap_tm_entregas.sql",
+        )],
+        *[SQL_DIR / "gold" / f for f in (
+            "05_f_movimientos_bodega.sql",
+            "06_f_stock_diario.sql",
+            "07_f_entregas.sql",
+        )],
+    ]
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        assert snippet_new in text, path.name
+        assert stale not in text, f"stale 107-bucket array in {path.name}"
+
+
+def test_partition_spec_mismatch_detects_old_range(apply_ddl):
+    """apply_ddl debe recrear cuando BQ tiene 20261101 y DDL pide 20261201."""
+    sql = (
+        "CREATE TABLE IF NOT EXISTS `gold_kora.f_entregas` (\n"
+        "  fecha_id INT64\n"
+        ")\n"
+        "PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))"
+    )
+    assert apply_ddl.expected_range_from_sql(sql) == (20250401, 20261201, 100)
+
+    class _Range:
+        start = 20250401
+        end = 20261101
+        interval = 100
+
+    class _RP:
+        field = "fecha_id"
+        range_ = _Range()
+
+    class _Table:
+        range_partitioning = _RP()
+
+    assert apply_ddl.actual_range_from_table(_Table()) == (20250401, 20261101, 100)
+    assert apply_ddl.partition_spec_mismatch(_Table(), sql) is True
+
+    class _RangeOk:
+        start = 20250401
+        end = 20261201
+        interval = 100
+
+    class _RPOk:
+        field = "fecha_id"
+        range_ = _RangeOk()
+
+    class _TableOk:
+        range_partitioning = _RPOk()
+
+    assert apply_ddl.partition_spec_mismatch(_TableOk(), sql) is False
+    # Sin PARTITION en DDL → no mismatch (dims / bronze).
+    assert apply_ddl.partition_spec_mismatch(_Table(), "CREATE TABLE IF NOT EXISTS `bronze_kora.md_sku` (x INT64)") is False
+
+
+def test_apply_statement_recreates_on_partition_spec_change(apply_ddl, monkeypatch):
+    client = MagicMock()
+
+    class _Range:
+        start = 20250401
+        end = 20261101
+        interval = 100
+
+    class _RP:
+        field = "fecha_id"
+        range_ = _Range()
+
+    class _Table:
+        range_partitioning = _RP()
+
+    client.get_table.return_value = _Table()
+    calls: list[str] = []
+
+    def fake_run(client_, sql, *, dry_run):
+        calls.append(sql)
+        return None
+
+    monkeypatch.setattr(apply_ddl, "run_ddl_job", fake_run)
+    spec = apply_ddl.StatementSpec(
+        sql=(
+            "CREATE TABLE IF NOT EXISTS `gold_kora.f_stock_diario` (\n"
+            "  fecha_id INT64 NOT NULL\n"
+            ")\n"
+            "PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))"
+        ),
+        table_fqn="gold_kora.f_stock_diario",
+        layer="gold",
+    )
+    result = apply_ddl.apply_statement(
+        client, project_id="kora-sports", spec=spec, dry_run=False
+    )
+    assert result.action == "recreated"
+    assert "partition-spec change" in result.detail
+    assert any("DROP TABLE IF EXISTS" in c for c in calls)
+    assert any("CREATE TABLE IF NOT EXISTS" in c for c in calls)
+
+    dry = apply_ddl.apply_statement(
+        client, project_id="kora-sports", spec=spec, dry_run=True
+    )
+    assert dry.action == "would_recreate"
+
+
+def test_unpartitioned_rows_sql_targets_facts(apply_ddl):
+    sql = apply_ddl.unpartitioned_rows_sql("kora-sports")
+    assert "INFORMATION_SCHEMA.PARTITIONS" in sql
+    assert "__UNPARTITIONED__" in sql
+    assert "__NULL__" in sql
+    assert "total_rows > 0" in sql
+    for dataset, table in apply_ddl.PARTITIONED_FACT_TABLES:
+        assert dataset in sql
+        assert f"'{table}'" in sql
+
+
+def test_check_no_unpartitioned_rows_fails_when_rows_present(apply_ddl):
+    """Post-run debe fallar si INFORMATION_SCHEMA reporta filas en __UNPARTITIONED__."""
+    client = MagicMock()
+
+    class _Job:
+        total_bytes_processed = 0
+
+        def result(self):
+            return [
+                {
+                    "table_schema": "gold_kora",
+                    "table_name": "f_entregas",
+                    "partition_id": "__UNPARTITIONED__",
+                    "total_rows": 79,
+                }
+            ]
+
+    client.query.return_value = _Job()
+    n_bad, rows = apply_ddl.check_no_unpartitioned_rows(
+        client, project_id="kora-sports", dry_run=False
+    )
+    assert n_bad == 1
+    assert rows[0]["partition_id"] == "__UNPARTITIONED__"
+    assert rows[0]["total_rows"] == 79
+
+    class _EmptyJob:
+        total_bytes_processed = 0
+
+        def result(self):
+            return []
+
+    client.query.return_value = _EmptyJob()
+    n_ok, rows_ok = apply_ddl.check_no_unpartitioned_rows(
+        client, project_id="kora-sports", dry_run=False
+    )
+    assert n_ok == 0
+    assert rows_ok == []

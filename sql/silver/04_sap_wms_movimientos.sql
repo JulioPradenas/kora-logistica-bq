@@ -1,7 +1,7 @@
 -- Silver movimientos: dedup movement_id, tipado, status/type canónico, FK vs silver masters.
 -- Re-declara PARTITION/CLUSTER (CTAS los perdería si no).
 CREATE OR REPLACE TABLE `silver_kora.sap_wms_movimientos`
-PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))
+PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))
 CLUSTER BY warehouse_id, sku_id
 AS
 WITH deduped AS (

@@ -14,11 +14,13 @@ Sandbox:
   - CTAS de facts re-declara PARTITION BY / CLUSTER BY (si no, se pierden).
 
 Orden: dims → facts → views.
-Post-run: reconciliación gold↔silver, orphan FKs = 0, rangePartitioning.
+Post-run: reconciliación gold↔silver, orphan FKs = 0, rangePartitioning,
+          0 filas en __UNPARTITIONED__/__NULL__ (Paso 8).
 """
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import re
 import sys
@@ -30,6 +32,20 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[1]
 SQL_DIR = ROOT / "sql" / "gold"
 DDL_GOLD = ROOT / "sql" / "ddl_gold.sql"
+APPLY_DDL_PATH = ROOT / "scripts" / "apply_ddl.py"
+
+
+def _load_apply_ddl():
+    """Carga apply_ddl para reutilizar check __UNPARTITIONED__ (Paso 8)."""
+    name = "apply_ddl"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, APPLY_DDL_PATH)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
 
 BQ_LOCATION = "southamerica-west1"
 SILVER_DATASET = "silver_kora"
@@ -87,7 +103,7 @@ EXPECTED_GOLD_COUNTS: dict[str, int] = {
 }
 
 PARTITION_SNIPPET = (
-    "PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261101, 100))"
+    "PARTITION BY RANGE_BUCKET(fecha_id, GENERATE_ARRAY(20250401, 20261201, 100))"
 )
 
 # Cluster esperados (Paso 4).
@@ -238,8 +254,8 @@ def assert_ctas_redeclarations(sql_text: str, table: str) -> list[str]:
             errors.append(f"{table}: CTAS must re-declare CLUSTER BY")
         if PARTITION_SNIPPET.upper() not in upper.replace("\n", " "):
             # Tolerate whitespace: check GENERATE_ARRAY bounds.
-            if "GENERATE_ARRAY(20250401, 20261101, 100)" not in sql_text.replace(" ", ""):
-                if "GENERATE_ARRAY(20250401, 20261101, 100)" not in sql_text:
+            if "GENERATE_ARRAY(20250401, 20261201, 100)" not in sql_text.replace(" ", ""):
+                if "GENERATE_ARRAY(20250401, 20261201, 100)" not in sql_text:
                     errors.append(f"{table}: PARTITION GENERATE_ARRAY bounds mismatch")
     elif table.startswith("v_"):
         if "CREATE OR REPLACE VIEW" not in upper:
@@ -631,6 +647,27 @@ def post_run_checks(client) -> int:
         print(f"  {'OK' if ok else 'MISSING':8}  {table}.range_partitioning.field=fecha_id")
         if not ok:
             failures += 1
+
+    print("==> INFORMATION_SCHEMA: 0 rows in __UNPARTITIONED__/__NULL__")
+    try:
+        apply_ddl = _load_apply_ddl()
+        project = getattr(client, "project", None) or load_project_id()
+        n_bad, bad_rows = apply_ddl.check_no_unpartitioned_rows(
+            client, project_id=project, dry_run=False
+        )
+        if n_bad == 0:
+            print("  OK        no rows in __UNPARTITIONED__/__NULL__")
+        else:
+            for row in bad_rows:
+                print(
+                    f"  FAIL      {row.get('table_schema')}.{row.get('table_name')} "
+                    f"partition_id={row.get('partition_id')} "
+                    f"total_rows={row.get('total_rows')}"
+                )
+            failures += n_bad
+    except Exception as exc:  # noqa: BLE001
+        print(f"  ERROR     unpartitioned check: {exc}")
+        failures += 1
 
     print("==> gold row counts (seed 42 expected)")
     for table, expected in EXPECTED_GOLD_COUNTS.items():
