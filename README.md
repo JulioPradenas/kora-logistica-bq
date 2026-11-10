@@ -31,41 +31,37 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Levantamiento de requerimientos | ✅ (este repo) |
 | Datos sintéticos + contrato | ✅ |
 | Datasets BQ medallón (`bronze`/`silver`/`gold`) | ✅ — `southamerica-west1` |
-| DDL + carga Python + transforms | ⏳ |
-| Demo partition/cluster | ⏳ |
+| DDL vacío (shapes + star; integer-range) | ✅ — sin carga |
+| Carga Python + transforms | ⏳ |
+| Demo partition/cluster (bytes) | ⏳ |
 | Looker Studio + one-page | ⏳ |
 
-## Setup rápido (se completa en pasos posteriores)
+## Setup rápido (Mac — un entrypoint)
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python scripts/generate_synthetic.py   # regenera data/raw (seed 42, HORIZON_END fijo 2026-10-31)
-cp .env.example .env
+cp -n .env.example .env                 # GCP_PROJECT=kora-sports
 gcloud auth application-default login
 gcloud config set project kora-sports
-python scripts/setup_bigquery.py --dry-run
-python scripts/setup_bigquery.py       # datasets bronze_kora / silver_kora / gold_kora
+
+make setup                              # .venv + deps (idempotente)
+make run                                # todas las etapas GCP (dry-run → apply) + verify
+make run DRY=1                          # solo dry-run de cada etapa (sin writes / sin bq)
+make test                               # pytest (mocks; sin GCP)
 ```
 
-Los CSV en `data/raw/` no se versionan; ver [data/README.md](data/README.md) (contrato + regeneración).
+`make run` ejecuta en orden la lista `STAGES` del Makefile (hoy: datasets → DDL; futuro: load/transforms = una línea nueva). Cada etapa es dry-run → apply idempotente; si falla, para. Al final: `bq ls` + `bq show --schema` de un fact gold + summary.  
+`GCP_PROJECT` se lee de `.env` (default `kora-sports`); el Makefile no imprime secretos ni SA keys.
 
-Datasets BigQuery: location **`southamerica-west1`** (Santiago). Detalle y límites sandbox en [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md).
-
-Para tests locales (contrato/generador + setup BQ con mocks):
-
-```bash
-pip install -r requirements-dev.txt
-pytest
-```
+Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md).  
+CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
 
 ## Docs
 
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
 - [Data contract (`data/README.md`)](data/README.md)
 - [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
-- Arquitectura, modelo dimensional y demo de bytes: TBD en pasos siguientes
+- [Paso 4 — DDL vacío medallón](docs/paso-04-ddl.md)
+- Carga, transforms y demo de bytes: TBD en pasos siguientes
 
 ## Disclaimer
 

@@ -2,7 +2,7 @@
 
 **Proyecto:** KORA Deportes · Logística (WMS + last mile)  
 **Prerrequisito:** Paso 2 mergeado en `main` (datos sintéticos + data contract)  
-**Siguiente:** Paso 4 — DDL bronze (tablas); **fuera de alcance de este paso**
+**Siguiente:** [Paso 4 — DDL vacío medallón](paso-04-ddl.md)
 
 ---
 
