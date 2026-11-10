@@ -40,7 +40,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python scripts/generate_synthetic.py   # regenera data/raw (seed 42)
+python scripts/generate_synthetic.py   # regenera data/raw (seed 42, HORIZON_END fijo 2026-10-31)
 cp .env.example .env
 gcloud auth application-default login
 gcloud config set project kora-sports

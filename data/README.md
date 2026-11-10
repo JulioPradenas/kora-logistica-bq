@@ -4,6 +4,8 @@
 Generar: `python scripts/generate_synthetic.py`  
 Proyecto GCP destino (Pasos 3+): `kora-sports`
 
+**Horizonte fijo (determinista):** por defecto `HORIZON_END=2026-10-31` → rango `2025-04-01` → `2026-10-31` (18 meses). No usa `date.today()`. Override opcional: `HORIZON_END=YYYY-MM-DD`.
+
 ## Archivos en `raw/`
 
 | Archivo | Origen simulado | Filas objetivo | PK lógica |
@@ -119,10 +121,10 @@ Sin estos puentes no hay cycle time picking→door ni “¿el late viene de bode
 ## Calidad esperada post-generación
 
 - [ ] `sap_wms_movimientos` ≥ 30 000 filas
-- [ ] Horizonte ≥ 12 meses entre min/max `event_date`
+- [ ] Horizonte fijo por defecto: `event_date` min=`2025-04-01`, max=`2026-10-31` (≥ 12 meses)
 - [ ] Todos los `warehouse_id` / `sku_id` / `carrier_id` de hechos existen en maestros (salvo quarantine futura)
 - [ ] Intersección de `shipment_id` movimientos∩entregas > 0
-- [ ] Re-run con seed 42 produce mismos conteos
+- [ ] Re-run con seed 42 (+ mismo `HORIZON_END`) produce **mismos bytes/conteos**, independiente del día de ejecución
 
 ## Extracción: CSV plano vs SAP Business One (nota de diseño)
 

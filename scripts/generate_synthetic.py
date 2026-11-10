@@ -4,6 +4,11 @@ KORA Deportes — generador de exports SAP-like (lab portafolio).
 Uso:
   python scripts/generate_synthetic.py
   RANDOM_SEED=42 HORIZON_MONTHS=18 python scripts/generate_synthetic.py
+  HORIZON_END=2026-10-31 python scripts/generate_synthetic.py   # default fijo
+
+El fin de horizonte es FIJO por defecto (DEFAULT_HORIZON_END) para que seed 42
+produzca siempre los mismos CSV, independiente del día de ejecución.
+Override opcional: HORIZON_END=YYYY-MM-DD
 """
 from __future__ import annotations
 
@@ -19,6 +24,8 @@ OUT = ROOT / "data" / "raw"
 
 SEED = int(os.getenv("RANDOM_SEED", "42"))
 HORIZON_MONTHS = int(os.getenv("HORIZON_MONTHS", "18"))
+# Fecha de cierre del lab: fija → determinismo seed 42 (no date.today()).
+DEFAULT_HORIZON_END = date(2026, 10, 31)
 N_SKUS = int(os.getenv("N_SKUS", "250"))
 N_WAREHOUSES = 8
 N_CARRIERS = 12
@@ -66,17 +73,29 @@ def daterange(start: date, end: date):
         d += timedelta(days=1)
 
 
+def resolve_horizon_end() -> date:
+    """Fin de horizonte: DEFAULT_HORIZON_END, o HORIZON_END=YYYY-MM-DD si se setea."""
+    raw = os.getenv("HORIZON_END", "").strip()
+    if not raw:
+        return DEFAULT_HORIZON_END
+    return date.fromisoformat(raw)
+
+
+def horizon_start(end: date, months: int) -> date:
+    """Primer día del mes, `months` meses atrás desde `end`."""
+    y, m = end.year, end.month - months
+    while m <= 0:
+        m += 12
+        y -= 1
+    return date(y, m, 1)
+
+
 def main() -> None:
     random.seed(SEED)
     OUT.mkdir(parents=True, exist_ok=True)
 
-    end = date.today()
-    # primer día del mes, HORIZON_MONTHS atrás
-    y, m = end.year, end.month - HORIZON_MONTHS
-    while m <= 0:
-        m += 12
-        y -= 1
-    start = date(y, m, 1)
+    end = resolve_horizon_end()
+    start = horizon_start(end, HORIZON_MONTHS)
 
     # --- maestros ---
     bodegas = []
