@@ -3,15 +3,20 @@
 KORA Deportes — generador de exports SAP-like (lab portafolio).
 Uso:
   python scripts/generate_synthetic.py
+  python scripts/generate_synthetic.py --dry-run
   RANDOM_SEED=42 HORIZON_MONTHS=18 python scripts/generate_synthetic.py
   HORIZON_END=2026-10-31 python scripts/generate_synthetic.py   # default fijo
 
 El fin de horizonte es FIJO por defecto (DEFAULT_HORIZON_END) para que seed 42
 produzca siempre los mismos CSV, independiente del día de ejecución.
 Override opcional: HORIZON_END=YYYY-MM-DD
+
+`--dry-run` (Paso 5 / Makefile): reporta seed, horizonte y paths de salida
+sin escribir CSV (compatible con `make run` dry-run → apply).
 """
 from __future__ import annotations
 
+import argparse
 import os
 import random
 from datetime import date, datetime, timedelta
@@ -90,12 +95,41 @@ def horizon_start(end: date, months: int) -> date:
     return date(y, m, 1)
 
 
-def main() -> None:
-    random.seed(SEED)
-    OUT.mkdir(parents=True, exist_ok=True)
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Genera CSV sintéticos KORA (seed 42, horizonte fijo)."
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Reporta seed/horizonte/paths sin escribir CSV.",
+    )
+    return parser.parse_args(argv)
 
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
     end = resolve_horizon_end()
     start = horizon_start(end, HORIZON_MONTHS)
+
+    if args.dry_run:
+        print("=== KORA synthetic export (dry-run) ===")
+        print(f"seed={SEED} horizon_months={HORIZON_MONTHS} range={start} → {end}")
+        print(f"would_write → {OUT}")
+        for name in (
+            "md_bodega.csv",
+            "md_sku.csv",
+            "md_transportista.csv",
+            "sap_wms_movimientos.csv",
+            "sap_wms_stock_snapshot.csv",
+            "sap_tm_entregas.csv",
+        ):
+            print(f"  would_create  {OUT / name}")
+        print("dry-run: no se escribieron CSV.")
+        return
+
+    random.seed(SEED)
+    OUT.mkdir(parents=True, exist_ok=True)
 
     # --- maestros ---
     bodegas = []
@@ -311,3 +345,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
