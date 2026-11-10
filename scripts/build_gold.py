@@ -322,6 +322,99 @@ def _alias_from_select_item(item: str) -> str:
     return m2.group(1) if m2 else ""
 
 
+def view_gold_column_refs(view_sql: str) -> dict[str, set[str]]:
+    """
+    Columnas referenciadas como alias.col sobre tablas gold_kora.* en una vista.
+    Retorna {table_name: {col, ...}} (solo dataset gold_kora).
+    """
+    body = strip_sql_comments(view_sql)
+    alias_to_table: dict[str, str] = {}
+    # FROM/JOIN `gold_kora.table` [AS] alias
+    for m in re.finditer(
+        r"(?:FROM|JOIN)\s+`gold_kora\.([a-zA-Z0-9_]+)`(?:\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*))?",
+        body,
+        flags=re.IGNORECASE,
+    ):
+        table = m.group(1)
+        alias = (m.group(2) or table).lower()
+        alias_to_table[alias] = table
+
+    refs: dict[str, set[str]] = {}
+    for m in re.finditer(
+        r"\b([a-zA-Z_][a-zA-Z0-9_]*)\.([a-zA-Z_][a-zA-Z0-9_]*)\b", body
+    ):
+        alias, col = m.group(1).lower(), m.group(2)
+        # Skip dataset.table FQNs already handled; gold_kora.x is dataset
+        if alias in {"gold_kora", "silver_kora", "bronze_kora"}:
+            continue
+        table = alias_to_table.get(alias)
+        if not table:
+            continue
+        refs.setdefault(table, set()).add(col)
+    return refs
+
+
+def assert_views_columns_in_gold_contract(
+    ddl_text: str,
+    sql_dir: Path | None = None,
+    *,
+    ctas_aliases: dict[str, set[str]] | None = None,
+) -> list[str]:
+    """
+    Cada columna gold referenciada por vistas 08-10 debe existir en ddl_gold
+    (contrato) o, si se pasa, en el SELECT del CTAS correspondiente.
+    Regresión: dry-run de vistas falla si el schema BQ (heredado de DDL) no
+    tiene on_time/in_full aunque el CTAS 07 las vaya a crear después.
+    """
+    base = sql_dir if sql_dir is not None else SQL_DIR
+    # Parse DDL columns (all modes).
+    ddl_cols: dict[str, set[str]] = {}
+    for table, cols in parse_ddl_required_columns(ddl_text).items():
+        ddl_cols.setdefault(table, set()).update(c.lower() for c in cols)
+    # Also nullable columns from DDL (ata_ts, qty_ordered).
+    for block in re.split(
+        r"CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS", ddl_text, flags=re.IGNORECASE
+    )[1:]:
+        m_name = re.search(r"`?gold_kora\.([a-z0-9_]+)`?", block, flags=re.I)
+        if not m_name:
+            continue
+        table = m_name.group(1)
+        schema_m = re.search(
+            r"\((.*?)\)\s*(?:PARTITION|CLUSTER|OPTIONS|;)", block, flags=re.I | re.S
+        )
+        if not schema_m:
+            continue
+        for line in schema_m.group(1).splitlines():
+            line = line.split("--")[0].strip().rstrip(",")
+            cm = re.match(r"^([a-zA-Z_][a-zA-Z0-9_]*)\s+\w+", line)
+            if cm:
+                ddl_cols.setdefault(table, set()).add(cm.group(1).lower())
+
+    errors: list[str] = []
+    view_files = (
+        "08_v_otif_diario.sql",
+        "09_v_cycle_time.sql",
+        "10_v_stock_salud.sql",
+    )
+    for fname in view_files:
+        path = base / fname
+        if not path.is_file():
+            errors.append(f"missing view file {fname}")
+            continue
+        refs = view_gold_column_refs(read_sql(path))
+        for table, cols in refs.items():
+            allowed = set(ddl_cols.get(table, set()))
+            if ctas_aliases and table in ctas_aliases:
+                allowed |= {c.lower() for c in ctas_aliases[table]}
+            missing = sorted(c for c in cols if c.lower() not in allowed)
+            for col in missing:
+                errors.append(
+                    f"{fname}: `{table}.{col}` referenced by view but missing "
+                    f"from ddl_gold.sql (and CTAS SELECT if provided)"
+                )
+    return errors
+
+
 def assert_ctas_covers_required(ddl_text: str, sql_dir: Path | None = None) -> list[str]:
     """
     Cada columna NOT NULL del DDL gold debe aparecer en el SELECT del CTAS

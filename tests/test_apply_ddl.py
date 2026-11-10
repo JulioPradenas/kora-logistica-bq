@@ -182,14 +182,29 @@ def test_apply_statement_creates_then_exists(apply_ddl):
 
 def test_run_dry_run_idempotent_report(apply_ddl, capsys):
     client = MagicMock()
-    # Alterna: primeras 3 missing, resto exist (simula partial)
+    # Alterna: primeras 3 missing, resto exist con schema completo (sin ADD).
     state = {"n": 0}
+    gold_cols = apply_ddl.extract_gold_columns_from_sql()
+
+    def _full_schema(table_ref: str):
+        name = str(table_ref).split(".")[-1]
+        cols = gold_cols.get(name) or []
+        fields = []
+        for col, _typ in cols:
+            f = MagicMock()
+            f.name = col
+            f.mode = "NULLABLE"
+            fields.append(f)
+        # bronze/silver existing: empty schema → relax may ALTER; give no REQUIRED
+        table = MagicMock()
+        table.schema = fields
+        return table
 
     def get_table(ref):
         state["n"] += 1
         if state["n"] <= 3:
             raise _not_found()
-        return MagicMock()
+        return _full_schema(ref)
 
     client.get_table.side_effect = get_table
     dry_job = MagicMock()
@@ -201,8 +216,10 @@ def test_run_dry_run_idempotent_report(apply_ddl, capsys):
     out = capsys.readouterr().out
     assert "dry_run=True" in out
     assert "would_create" in out
-    assert "would_skip" in out
+    assert "would_skip" in out or "schema_ok" in out
+    # Solo los 3 CREATE dry-run (tablas existentes no disparan ADD si schema completo).
     assert client.query.call_count == 3
+    assert "sync gold schema" in out
 
 
 def test_run_apply_all_missing(apply_ddl, capsys):
@@ -274,6 +291,87 @@ def test_relax_bronze_already_nullable_no_alter(apply_ddl):
     )
     assert results[0].action == "nullable_ok"
     client.query.assert_not_called()
+
+
+def test_sync_gold_schema_adds_missing_on_time_in_full(apply_ddl):
+    """
+    Regresión Julio make run: f_entregas Paso 4 sin on_time/in_full →
+    apply_ddl debe emitir ADD COLUMN IF NOT EXISTS (DDL = contrato).
+    """
+    client = MagicMock()
+
+    def field(name: str):
+        f = MagicMock()
+        f.name = name
+        f.mode = "NULLABLE"
+        return f
+
+    # Schema legacy Paso 4 (sin flags OTIF).
+    legacy = [
+        "fecha_id",
+        "shipment_id",
+        "order_id",
+        "bodega_id",
+        "transportista_id",
+        "comuna_id",
+        "comuna_name",
+        "ship_fecha_id",
+        "eta_ts",
+        "ata_ts",
+        "status",
+        "qty_delivered",
+    ]
+    table = MagicMock()
+    table.schema = [field(c) for c in legacy]
+    client.get_table.return_value = table
+    job = MagicMock()
+    client.query.return_value = job
+
+    results = apply_ddl.sync_gold_schema(
+        client,
+        project_id="kora-sports",
+        dry_run=False,
+        tables=("f_entregas",),
+    )
+    assert len(results) == 1
+    assert results[0].action == "added_columns"
+    assert "on_time" in results[0].detail
+    assert "in_full" in results[0].detail
+    sqls = [c.args[0] for c in client.query.call_args_list]
+    assert any("ADD COLUMN IF NOT EXISTS" in s and "on_time" in s for s in sqls)
+    assert any("ADD COLUMN IF NOT EXISTS" in s and "in_full" in s for s in sqls)
+
+
+def test_sync_gold_schema_ok_when_complete(apply_ddl):
+    client = MagicMock()
+    cols = apply_ddl.extract_gold_columns_from_sql()["f_entregas"]
+    fields = []
+    for name, _typ in cols:
+        f = MagicMock()
+        f.name = name
+        f.mode = "NULLABLE"
+        fields.append(f)
+    table = MagicMock()
+    table.schema = fields
+    client.get_table.return_value = table
+
+    results = apply_ddl.sync_gold_schema(
+        client,
+        project_id="kora-sports",
+        dry_run=False,
+        tables=("f_entregas",),
+    )
+    assert results[0].action == "schema_ok"
+    client.query.assert_not_called()
+
+
+def test_gold_ddl_includes_otif_flags(apply_ddl):
+    cols = {
+        name: typ
+        for name, typ in apply_ddl.extract_gold_columns_from_sql()["f_entregas"]
+    }
+    assert cols["on_time"] == "BOOL"
+    assert cols["in_full"] == "BOOL"
 
 
 def test_load_project_id_from_env(apply_ddl, tmp_path, monkeypatch):

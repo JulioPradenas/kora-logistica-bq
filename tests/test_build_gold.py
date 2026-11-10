@@ -6,6 +6,7 @@ CI debe pasar sin ADC ni project real.
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -116,6 +117,49 @@ def test_otif_and_stock_views_follow_kpi_doc(build_gold):
     assert "is_overstock" in stock
     # Assumption documented in SQL comment (no invented SLA as if from workshop)
     assert "ASUNCIÓN" in stock or "ASUNCION" in stock.upper()
+
+
+def test_views_08_10_columns_exist_in_gold_ddl(build_gold):
+    """
+    Regresión dry-run vistas: columnas referenciadas (p. ej. f.on_time) deben
+    existir en ddl_gold.sql — el contrato que apply_ddl sincroniza a BQ.
+    Falla si se quitan on_time/in_full del DDL aunque el CTAS 07 las produzca.
+    """
+    ddl = DDL_GOLD.read_text(encoding="utf-8")
+    errs = build_gold.assert_views_columns_in_gold_contract(ddl, SQL_DIR)
+    assert errs == [], errs
+
+    # Control negativo: DDL sin on_time/in_full debe fallar (bug Julio).
+    ddl_legacy_lines = []
+    for line in ddl.splitlines():
+        if re.search(r"\bon_time\b|\bin_full\b", line):
+            continue
+        ddl_legacy_lines.append(line)
+    ddl_legacy = "\n".join(ddl_legacy_lines)
+    entregas_body = ddl_legacy.split("f_entregas")[1].split("PARTITION")[0]
+    assert "on_time" not in entregas_body
+    assert "in_full" not in entregas_body
+    neg = build_gold.assert_views_columns_in_gold_contract(ddl_legacy, SQL_DIR)
+    assert any("on_time" in e for e in neg), neg
+    assert any("in_full" in e for e in neg), neg
+
+    # Refs explícitas de las vistas OTIF/cycle.
+    otif_refs = build_gold.view_gold_column_refs(
+        (SQL_DIR / "08_v_otif_diario.sql").read_text(encoding="utf-8")
+    )
+    assert "on_time" in otif_refs.get("f_entregas", set())
+    assert "in_full" in otif_refs.get("f_entregas", set())
+    cycle_refs = build_gold.view_gold_column_refs(
+        (SQL_DIR / "09_v_cycle_time.sql").read_text(encoding="utf-8")
+    )
+    assert "on_time" in cycle_refs.get("f_entregas", set())
+    stock_refs = build_gold.view_gold_column_refs(
+        (SQL_DIR / "10_v_stock_salud.sql").read_text(encoding="utf-8")
+    )
+    assert "f_stock_diario" in stock_refs or "d_fecha" in stock_refs
+    assert "usable_qty" in stock_refs.get("f_stock_diario", set()) or any(
+        "usable_qty" in cols for cols in stock_refs.values()
+    )
 
 
 def test_dry_run_no_writes(build_gold, tmp_path: Path):

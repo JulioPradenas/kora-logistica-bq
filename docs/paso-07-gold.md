@@ -26,6 +26,30 @@ Construir el **datamart único** `dm_logistica_retail` (conceptual) como tablas/
 
 ---
 
+## Incidente — DDL gold como contrato vs schema BQ existente
+
+**Síntoma (Julio, `make run` real):** stage `[6] build_gold.py --dry-run` falló en:
+
+- `08_v_otif_diario.sql` — `Name on_time not found inside f`
+- `09_v_cycle_time.sql` — `Name on_time not found inside e`
+
+SQL `01`–`07` y `10` pasaron dry-run.
+
+**Causa:** `gold_kora.f_entregas` ya existía desde Paso 4 **sin** `on_time`/`in_full`.  
+`CREATE TABLE IF NOT EXISTS` no altera tablas existentes. El dry-run de **vistas** valida contra el schema BQ **actual**, no contra el CTAS `07_f_entregas` que aún no se aplicó. El archivo `ddl_gold.sql` ya declaraba las columnas, pero BQ seguía en el shape viejo → drift DDL↔tabla.
+
+**Fix (opción 1 — DDL = contrato):**
+
+1. Mantener `sql/ddl_gold.sql` alineado a cada CTAS gold (incl. `on_time`/`in_full` BOOL).
+2. `apply_ddl.py` — tras CREATE, **`ALTER TABLE … ADD COLUMN IF NOT EXISTS`** en gold existente (idempotente; DDL OK en sandbox). Así el dry-run de vistas ve los nombres antes de materializar el CTAS 07.
+3. Pytest: columnas referenciadas por vistas `08`–`10` ⊆ columnas de `ddl_gold.sql`; sync emite ADD para schema legacy.
+
+**Por qué dry-run lo cazó sin writes:** `QueryJobConfig(dry_run=True)` en `CREATE OR REPLACE VIEW` resuelve referencias contra tablas reales; no simula el CTAS pendiente. Fallar en dry-run (antes del apply) evita un half-apply de gold.
+
+**Alternativa descartada:** diferir dry-run de vistas hasta después de facts — enmascara el contrato DDL y complica `make run` (stages asumen dry-run→apply por script).
+
+---
+
 ## Grano (star)
 
 | Objeto | Grano (1 fila =) | Origen |
@@ -119,11 +143,11 @@ python scripts/build_gold.py
 ## Makefile / STAGES
 
 1. `setup_bigquery.py`
-2. `apply_ddl.py`
+2. **`apply_ddl.py`** — CREATE IF NOT EXISTS + bronze DROP NOT NULL + **gold ADD COLUMN IF NOT EXISTS**
 3. `generate_synthetic.py`
 4. `load_bronze.py`
 5. `transform_silver.py`
-6. **`build_gold.py`** ← este paso
+6. **`build_gold.py`** ← este paso (dry-run de vistas ya ve schema gold sincronizado)
 
 Verify final también imprime `num_rows` gold (expect arriba) + `rangePartitioning` de `f_entregas`.
 
