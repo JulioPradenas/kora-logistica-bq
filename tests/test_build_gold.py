@@ -40,11 +40,13 @@ def test_build_files_order_dims_facts_views(build_gold):
     assert names[0] == "01_d_fecha.sql"
     assert names[1].startswith("02_d_")
     assert "05_f_movimientos_bodega.sql" in names
-    assert names[-1] == "10_v_stock_salud.sql"
+    assert "10_v_stock_salud.sql" in names
+    assert names[-1] == "13_v_entregas_drill.sql"
     idx_dim = names.index("04_d_transportista.sql")
     idx_fact = names.index("05_f_movimientos_bodega.sql")
     idx_view = names.index("08_v_otif_diario.sql")
-    assert idx_dim < idx_fact < idx_view
+    idx_looker = names.index("11_v_heatmap_bodega_semana.sql")
+    assert idx_dim < idx_fact < idx_view < idx_looker
 
 
 def test_sql_files_exist_ctas_no_dml_and_partition(build_gold):
@@ -205,7 +207,9 @@ def test_dry_run_no_writes(build_gold, tmp_path: Path):
     sql_dir = tmp_path / "gold"
     sql_dir.mkdir()
     for name in build_gold.BUILD_FILES:
-        if name.startswith(("08_", "09_", "10_")):
+        # NN_v_* = views; resto = tables (dims/facts).
+        is_view = "_v_" in name
+        if is_view:
             (sql_dir / name).write_text(
                 f"CREATE OR REPLACE VIEW `gold_kora.v_{name}` AS SELECT 1 AS x;",
                 encoding="utf-8",

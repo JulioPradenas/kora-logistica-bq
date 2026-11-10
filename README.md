@@ -36,7 +36,8 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Transforms silver + quarantine | ✅ — CTAS + `quarantine_rows` |
 | Gold datamart (`dm_logistica_retail`) | ✅ — star + vistas OTIF/cycle/stock |
 | Demo partition/cluster (bytes) | ✅ — 108 buckets; prune dry_run stage 7 |
-| Looker Studio + one-page | ⏳ |
+| Looker Studio (vistas gold + guía) | ✅ — heatmap/funnel/drill; publish manual |
+| One-page portafolio | ⏳ |
 
 ## Setup rápido (Mac — un entrypoint)
 
@@ -84,7 +85,9 @@ CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/
 - [Paso 6 — transform silver + quarantine](docs/paso-06-silver.md)
 - [Paso 7 — gold datamart](docs/paso-07-gold.md)
 - [Paso 8 — partition prune + 108 buckets](docs/paso-08-pruning.md)
-- Looker Studio + one-page: TBD Paso 9
+- [Paso 9 — Looker Studio + vistas gold](docs/paso-09-looker.md)
+- [Guía Looker Studio (`looker/README.md`)](looker/README.md)
+- One-page portafolio: TBD
 
 ## Disclaimer
 
