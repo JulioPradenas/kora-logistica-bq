@@ -21,6 +21,9 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Datos sintéticos regenerables (opción B: no trackear CSV grandes)
+data/raw/*.csv
+
 # Datos locales opcionales (si generas fuera de data/raw trackeado)
 tmp/
 *.log

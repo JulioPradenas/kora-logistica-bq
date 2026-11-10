@@ -1,3 +1,5 @@
+# KORA Deportes — Logística (WMS + last mile) en BigQuery
+
 > **Lab de portafolio / migración demostrativa.** Marca ficticia con fines ilustrativos.  
 > No es un entregable de empleo ni un claim sobre una empresa real.
 
@@ -27,7 +29,7 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Fase | Estado |
 |---|---|
 | Levantamiento de requerimientos | ✅ (este repo) |
-| Datos sintéticos + contrato | ⏳ Paso 2 |
+| Datos sintéticos + contrato | ✅ |
 | DDL + carga Python + transforms | ⏳ |
 | Demo partition/cluster | ⏳ |
 | Looker Studio + one-page | ⏳ |
@@ -38,13 +40,25 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+python scripts/generate_synthetic.py   # regenera data/raw (seed 42)
 cp .env.example .env
 gcloud auth application-default login
 gcloud config set project kora-sports
+```
+
+Los CSV en `data/raw/` no se versionan; ver [data/README.md](data/README.md) (contrato + regeneración).
+
+Para tests locales del contrato/generador:
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
 
 ## Docs
 
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
+- [Data contract (`data/README.md`)](data/README.md)
 - Arquitectura, modelo dimensional y demo de bytes: TBD en pasos siguientes
 
 ## Disclaimer
