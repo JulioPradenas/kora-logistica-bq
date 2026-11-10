@@ -31,8 +31,9 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Levantamiento de requerimientos | ✅ (este repo) |
 | Datos sintéticos + contrato | ✅ |
 | Datasets BQ medallón (`bronze`/`silver`/`gold`) | ✅ — `southamerica-west1` |
-| DDL + carga Python + transforms | ⏳ |
-| Demo partition/cluster | ⏳ |
+| DDL vacío (shapes + star; integer-range) | ✅ — sin carga |
+| Carga Python + transforms | ⏳ |
+| Demo partition/cluster (bytes) | ⏳ |
 | Looker Studio + one-page | ⏳ |
 
 ## Setup rápido (se completa en pasos posteriores)
@@ -47,13 +48,16 @@ gcloud auth application-default login
 gcloud config set project kora-sports
 python scripts/setup_bigquery.py --dry-run
 python scripts/setup_bigquery.py       # datasets bronze_kora / silver_kora / gold_kora
+python scripts/apply_ddl.py --dry-run
+python scripts/apply_ddl.py            # DDL vacío bronze/silver/gold (IF NOT EXISTS)
 ```
 
 Los CSV en `data/raw/` no se versionan; ver [data/README.md](data/README.md) (contrato + regeneración).
 
-Datasets BigQuery: location **`southamerica-west1`** (Santiago). Detalle y límites sandbox en [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md).
+Datasets BigQuery: location **`southamerica-west1`** (Santiago). Detalle y límites sandbox en [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md).  
+DDL (partición integer-range, sin DML, sin carga): [docs/paso-04-ddl.md](docs/paso-04-ddl.md).
 
-Para tests locales (contrato/generador + setup BQ con mocks):
+Para tests locales (contrato/generador + setup/DDL BQ con mocks):
 
 ```bash
 pip install -r requirements-dev.txt
@@ -65,7 +69,8 @@ pytest
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
 - [Data contract (`data/README.md`)](data/README.md)
 - [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
-- Arquitectura, modelo dimensional y demo de bytes: TBD en pasos siguientes
+- [Paso 4 — DDL vacío medallón](docs/paso-04-ddl.md)
+- Carga, transforms y demo de bytes: TBD en pasos siguientes
 
 ## Disclaimer
 
