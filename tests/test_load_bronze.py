@@ -94,6 +94,30 @@ def test_build_load_job_config_explicit_no_autodetect(load_bronze):
     assert [f.name for f in cfg.schema] == ["warehouse_id", "warehouse_name"]
 
 
+def test_load_schema_forces_nullable_never_required(load_bronze):
+    """
+    Regresión Julio make run: load con schema REQUIRED rechaza anomalías null
+    ('Required column value is missing'). El job debe forzar NULLABLE.
+    """
+    from google.cloud import bigquery
+
+    required_schema = [
+        bigquery.SchemaField("event_date", "DATE", mode="REQUIRED"),
+        bigquery.SchemaField("warehouse_id", "STRING", mode="REQUIRED"),
+        bigquery.SchemaField("qty", "INT64", mode="REQUIRED"),
+    ]
+    # Falla el contrato si alguien vuelve a pasar schema REQUIRED sin coerce.
+    assert any(f.mode == "REQUIRED" for f in required_schema)
+
+    nullable = load_bronze.schema_as_nullable(required_schema)
+    assert all(f.mode == "NULLABLE" for f in nullable)
+    assert [f.name for f in nullable] == ["event_date", "warehouse_id", "qty"]
+
+    cfg = load_bronze.build_load_job_config(required_schema)
+    assert all(f.mode == "NULLABLE" for f in cfg.schema)
+    assert not any(str(f.mode).upper() == "REQUIRED" for f in cfg.schema)
+
+
 def test_verify_row_count_pass_fail(load_bronze):
     load_bronze.verify_row_count(csv_rows=8, bq_rows=8, table_id="md_bodega")
     with pytest.raises(ValueError, match="Row count mismatch"):

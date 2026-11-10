@@ -13,7 +13,9 @@ ni espera un JSON de service account en el repo.
 Proyecto: .env / entorno — GCP_PROJECT o GOOGLE_CLOUD_PROJECT (default lab: kora-sports).
 
 Sandbox:
-  - Sin DML → solo CREATE TABLE IF NOT EXISTS (DDL en sql/ddl_*.sql).
+  - Sin DML → CREATE TABLE IF NOT EXISTS (DDL en sql/ddl_*.sql) + ALTER DDL.
+  - Paso 6: bronze es landing NULLABLE; tablas ya creadas con NOT NULL se
+    relajan con ALTER TABLE … ALTER COLUMN … DROP NOT NULL (idempotente).
   - Cargas posteriores: CREATE OR REPLACE TABLE AS SELECT / load jobs (Pasos 5+).
   - dry-run usa QueryJobConfig(dry_run=True) para validar SQL sin crear.
 
@@ -395,6 +397,120 @@ def apply_statement(
     )
 
 
+def bronze_drop_not_null_sql(project_id: str, table_id: str, column: str) -> str:
+    """DDL: relaja REQUIRED → NULLABLE en una columna bronze (sandbox OK)."""
+    return (
+        f"ALTER TABLE `{project_id}.bronze_kora.{table_id}` "
+        f"ALTER COLUMN `{column}` DROP NOT NULL"
+    )
+
+
+def required_field_names(schema) -> list[str]:
+    """Nombres de campos con mode REQUIRED (API BigQuery)."""
+    out: list[str] = []
+    try:
+        fields = list(schema) if schema is not None else []
+    except TypeError:
+        return out
+    for field in fields:
+        mode = getattr(field, "mode", None) or "NULLABLE"
+        if str(mode).upper() == "REQUIRED":
+            out.append(field.name)
+    return out
+
+
+def relax_bronze_nullability(
+    client,
+    *,
+    project_id: str,
+    dry_run: bool = False,
+    tables: tuple[str, ...] | None = None,
+) -> list[ApplyResult]:
+    """
+    Idempotente: para cada tabla bronze existente, DROP NOT NULL en columnas
+    REQUIRED. Necesario porque CREATE TABLE IF NOT EXISTS no altera tablas
+    ya creadas en el laptop de Julio (Paso 4 con NOT NULL).
+    """
+    from google.api_core.exceptions import NotFound
+
+    target_tables = tables if tables is not None else tuple(BRONZE_CONTRACT.keys())
+    results: list[ApplyResult] = []
+
+    for table_id in target_tables:
+        table_fqn = f"bronze_kora.{table_id}"
+        full = f"{project_id}.{table_fqn}"
+        try:
+            table = client.get_table(full)
+        except NotFound:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_skip" if dry_run else "skipped",
+                    detail="table missing — CREATE runs first",
+                )
+            )
+            continue
+        except Exception as exc:  # noqa: BLE001
+            results.append(
+                ApplyResult(table_fqn=table_fqn, action="error", detail=str(exc))
+            )
+            continue
+
+        required = required_field_names(table.schema)
+        if not required:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_skip" if dry_run else "nullable_ok",
+                    detail="all columns already NULLABLE",
+                )
+            )
+            continue
+
+        altered: list[str] = []
+        failed: list[str] = []
+        for col in required:
+            sql = bronze_drop_not_null_sql(project_id, table_id, col)
+            try:
+                run_ddl_job(client, sql, dry_run=dry_run)
+                altered.append(col)
+            except Exception as exc:  # noqa: BLE001
+                failed.append(f"{col}:{exc}")
+
+        if failed:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="error",
+                    detail=f"DROP NOT NULL failed: {'; '.join(failed)}",
+                )
+            )
+        else:
+            results.append(
+                ApplyResult(
+                    table_fqn=table_fqn,
+                    action="would_relax" if dry_run else "relaxed",
+                    detail=f"DROP NOT NULL → {', '.join(altered)}",
+                )
+            )
+    return results
+
+
+def bronze_ddl_has_not_null(sql_text: str | None = None) -> bool:
+    """True si ddl_bronze.sql declara NOT NULL (regresión landing permisivo)."""
+    text = sql_text
+    if text is None:
+        text = (SQL_DIR / "ddl_bronze.sql").read_text(encoding="utf-8")
+    # Ignora comentarios de línea.
+    body_lines = []
+    for line in text.splitlines():
+        if "--" in line:
+            line = line[: line.index("--")]
+        body_lines.append(line)
+    body = "\n".join(body_lines)
+    return bool(re.search(r"\bNOT\s+NULL\b", body, flags=re.IGNORECASE))
+
+
 def run(*, dry_run: bool = False, project_id: str | None = None, client=None) -> int:
     project = project_id or load_project_id()
     print(f"project={project}")
@@ -424,18 +540,40 @@ def run(*, dry_run: bool = False, project_id: str | None = None, client=None) ->
         if result.action == "error":
             errors += 1
 
+    # Paso 6: relajar NOT NULL en bronze existente (CREATE IF NOT EXISTS no basta).
+    print("==> relax bronze nullability (ALTER COLUMN DROP NOT NULL)")
+    relax_results = relax_bronze_nullability(
+        bq_client, project_id=project, dry_run=dry_run
+    )
+    for result in relax_results:
+        results.append(result)
+        print(f"  {result.action:12}  {result.table_fqn}  {result.detail}")
+        if result.action == "error":
+            errors += 1
+
     created = sum(1 for r in results if r.action in {"created", "would_create"})
-    skipped = sum(1 for r in results if r.action in {"exists", "would_skip"})
-    print(f"summary: tables={len(results)} created_or_planned={created} skipped={skipped} errors={errors}")
+    skipped = sum(
+        1
+        for r in results
+        if r.action in {"exists", "would_skip", "skipped", "nullable_ok"}
+    )
+    relaxed = sum(1 for r in results if r.action in {"relaxed", "would_relax"})
+    print(
+        f"summary: tables={len(statements)} created_or_planned={created} "
+        f"skipped={skipped} relaxed={relaxed} errors={errors}"
+    )
 
     if dry_run:
-        print("dry-run: validación BigQuery job dry_run; no se crearon tablas.")
+        print("dry-run: validación BigQuery job dry_run; no se crearon/alteraron tablas.")
         return 1 if errors else 0
 
     if errors:
         print("APPLY FAILED: uno o más DDL fallaron.", file=sys.stderr)
         return 1
-    print("OK: DDL bronze/silver/gold aplicado (CREATE TABLE IF NOT EXISTS).")
+    print(
+        "OK: DDL bronze/silver/gold aplicado; bronze NULLABLE "
+        "(CREATE IF NOT EXISTS + ALTER DROP NOT NULL)."
+    )
     return 0
 
 

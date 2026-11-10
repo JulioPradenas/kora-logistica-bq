@@ -26,6 +26,26 @@ Limpiar `bronze_kora` → `silver_kora` con reglas de calidad observables. Filas
 
 ---
 
+## Incidente — landing permisivo vs silver estricto
+
+**Síntoma (Julio, `make run` real):** stage `[4] load_bronze` rechazó facts con  
+`Required column value is missing` en `event_date`/`warehouse_id` (movimientos ~20),  
+`snapshot_date`/`warehouse_id` (stock ~10), `delivery_date`/`order_id` (entregas ~15).
+
+**Causa:** DDL Paso 4 dejó columnas bronze **REQUIRED**. `CREATE TABLE IF NOT EXISTS` no altera tablas ya creadas; `load_bronze` tomaba el schema de la tabla (`max_bad_records=0`). Las anomalías null de Paso 6 **nunca entraban a bronze**.
+
+**Fix (elegido):**
+
+1. `sql/ddl_bronze.sql` — **todas** las columnas NULLABLE (tipos iguales).
+2. `apply_ddl.py` — tras CREATE, **`ALTER TABLE … ALTER COLUMN … DROP NOT NULL`** en columnas REQUIRED de bronze existentes (idempotente; DDL OK en sandbox). Esto es lo que desbloquea el laptop de Julio.
+3. `load_bronze.py` — `schema_as_nullable()` en el LoadJobConfig (no re-impone REQUIRED). No se usa `ALLOW_FIELD_RELAXATION` con `WRITE_TRUNCATE` en tablas no particionadas (poco fiable).
+
+**Por qué no solo cambiar el DDL:** Julio ya tiene tablas; IF NOT EXISTS no relaja nullability.  
+**Por qué no solo el load:** el table schema REQUIRED sigue rechazando nulls aunque el job declare NULLABLE.  
+**Silver:** sigue estricto (filtros + quarantine `null_required_*`).
+
+---
+
 ## Conteos esperados (seed 42)
 
 ### Bronze (tras anomalías)

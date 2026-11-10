@@ -302,3 +302,22 @@ def test_makefile_n_run_includes_transform_silver():
 def test_generator_status_variants_covered(generate_synthetic, transform_silver):
     for variant in generate_synthetic.STATUS_CASING_VARIANTS:
         assert transform_silver.canonical_status(variant) is not None, variant
+
+
+def test_quarantine_and_silver_handle_null_required():
+    """Audit: nulls de bronze landing van a quarantine; silver filtra IS NOT NULL."""
+    q = (SQL_DIR / "07_quarantine_rows.sql").read_text(encoding="utf-8")
+    mov = (SQL_DIR / "04_sap_wms_movimientos.sql").read_text(encoding="utf-8")
+    stk = (SQL_DIR / "05_sap_wms_stock_snapshot.sql").read_text(encoding="utf-8")
+    ent = (SQL_DIR / "06_sap_tm_entregas.sql").read_text(encoding="utf-8")
+    assert "null_required_date" in q
+    assert "null_required_key" in q
+    assert "event_date IS NULL" in mov or "d.event_date IS NOT NULL" in mov
+    assert "snapshot_date IS NOT NULL" in stk
+    assert "delivery_date IS NOT NULL" in ent
+    # Silver sigue estricto (DDL shape); CTAS no reintroduce NOT NULL en bronze.
+    ddl_bronze = (ROOT / "sql" / "ddl_bronze.sql").read_text(encoding="utf-8")
+    body = "\n".join(
+        ln if "--" not in ln else ln[: ln.index("--")] for ln in ddl_bronze.splitlines()
+    )
+    assert "NOT NULL" not in body.upper()

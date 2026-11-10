@@ -21,6 +21,8 @@ Resumen bronze seed 42: **8 / 250 / 12 / 60285 / 208555 / 29923**.
 
 Encoding: UTF-8. Separador: `,`. Header en fila 1. Fechas: `YYYY-MM-DD`. Timestamps: `YYYY-MM-DD HH:MM:SS` (naive, calendario Chile).
 
+**Landing bronze = NULLABLE** (Paso 6): vacíos/nulls de anomalías deben poder cargar; la estrictitud (NOT NULL / FK / canónicos) vive en **silver + quarantine**. Tablas bronze ya creadas con REQUIRED se relajan en `apply_ddl` (`ALTER … DROP NOT NULL`).
+
 Los CSV **no** se versionan en git (`data/raw/*.csv` en `.gitignore`). Regenerar con el comando de arriba; `data/raw/.gitkeep` mantiene la carpeta.
 
 ---
