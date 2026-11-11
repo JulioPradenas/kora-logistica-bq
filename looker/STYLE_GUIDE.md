@@ -66,9 +66,10 @@ Usa **`v_entregas_drill`** con `COUNT_DISTINCT(shipment_id)` → **29.803**.
 
 ---
 
-## 3. Checklist paso a paso (trabajo restante)
+## 3. Checklist paso a paso
 
-Etiquetas de la UI de Data Studio en español. Abrir el informe en modo edición.
+Etiquetas de la UI de Data Studio en español. Abrir el informe en modo edición.  
+**(a)–(f) aplicados** en Overview (2026-11-11) — detalle y capturas: [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md). Resta **(g)** homologar header/cards en las demás páginas.
 
 ### (a) OTIF semanal
 
@@ -171,3 +172,4 @@ Si algún número no cuadra: primero Restablecer filtros → recargar → confir
 | [`mockup/README.md`](mockup/README.md) | Disclaimer de mockups |
 | [`README.md`](README.md) | Guía de conexión BQ + páginas MVP |
 | [`screenshots/`](screenshots/) | Capturas reales del informe publicado |
+| [`screenshots/overview/`](screenshots/overview/) | Overview pulido (Paso 11) — ver [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md) |

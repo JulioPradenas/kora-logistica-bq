@@ -235,6 +235,25 @@ def test_looker_readme_and_paso09_doc_placeholders():
     ):
         assert name in readme
         assert (ROOT / "looker" / "screenshots" / name).is_file()
+    # Paso 11 — Overview pulido (paths + doc)
+    overview_dir = ROOT / "looker" / "screenshots" / "overview"
+    for name in (
+        "overview_final.png",
+        "overview_baseline.png",
+        "overview_a_semanal.png",
+        "overview_c_deltas.png",
+        "overview_d_semaforo.png",
+        "overview_e_kpis.png",
+    ):
+        assert (overview_dir / name).is_file(), name
+    assert "overview/overview_final.png" in readme
+    assert "paso-11-overview-pulido" in readme
+    paso11 = ROOT / "docs" / "paso-11-overview-pulido.md"
+    assert paso11.is_file()
+    paso11_txt = paso11.read_text(encoding="utf-8")
+    assert "artefacto" in paso11_txt.lower() or "stitch" in paso11_txt.lower()
+    assert "58,06%" in paso11_txt
+    assert "ship_fecha_id" in paso11_txt
     assert "Stock salud" in readme
     assert "Lecciones de construcción" in readme
     assert "58,06%" in readme

@@ -5,7 +5,8 @@ Guía exacta para conectar el dashboard MVP al datamart gold.
 
 > Auth en la laptop de Julio (ADC). Este repo **no** guarda credenciales GCP ni publica el informe por el agente.
 
-**Estilo / polish del informe:** [`STYLE_GUIDE.md`](STYLE_GUIDE.md) — tokens, estado actual Overview, checklist Data Studio y mockups en [`mockup/`](mockup/) (referencia visual; no valores en vivo).
+**Estilo / polish del informe:** [`STYLE_GUIDE.md`](STYLE_GUIDE.md) — tokens, estado actual Overview, checklist Data Studio y mockups en [`mockup/`](mockup/) (referencia visual; no valores en vivo).  
+**Overview pulido (Paso 11):** [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md) — semanal, deltas, semáforo celda, tipografía KPI, funnel por `stage_code`; capturas en [`screenshots/overview/`](screenshots/overview/).
 
 ---
 
@@ -14,15 +15,20 @@ Guía exacta para conectar el dashboard MVP al datamart gold.
 | Campo | Valor |
 |---|---|
 | **Viewer link (share-as-reader)** | [Abrir dashboard KORA](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) |
-| **Screenshot overview** | [`looker/screenshots/01-overview.png`](screenshots/01-overview.png) |
+| **Screenshot overview (pulido)** | [`looker/screenshots/overview/overview_final.png`](screenshots/overview/overview_final.png) |
+| **Screenshot overview (Paso 9)** | [`looker/screenshots/01-overview.png`](screenshots/01-overview.png) |
 | **Screenshot heatmap** | [`looker/screenshots/02-heatmap.png`](screenshots/02-heatmap.png) |
 | **Screenshot funnel** | [`looker/screenshots/03-funnel.png`](screenshots/03-funnel.png) |
 | **Screenshot drill** | [`looker/screenshots/04-drill.png`](screenshots/04-drill.png) |
 | **Screenshot stock salud** | [`looker/screenshots/05-stock.png`](screenshots/05-stock.png) |
 
-### Capturas (Data Studio · 2026-11-10)
+### Capturas (Data Studio · Overview pulido 2026-11-11)
 
-![Overview OTIF + cycle](screenshots/01-overview.png)
+![Overview OTIF + cycle (pulido)](screenshots/overview/overview_final.png)
+
+> `overview_final.png` es un stitch de dos capturas; la franja gris entre funnel y tabla es artefacto del pegado, no del informe. Detalle del pulido: [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md).
+
+### Capturas (Data Studio · cierre Paso 9 · 2026-11-10)
 
 ![Heatmap bodega × semana](screenshots/02-heatmap.png)
 

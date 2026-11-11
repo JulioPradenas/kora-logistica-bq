@@ -111,6 +111,7 @@ Lo partiría cuando ownership, grano, SLA de refresh o seguridad diverjan (p. ej
 - [Paso 7 — gold datamart](docs/paso-07-gold.md)
 - [Paso 8 — partition prune + 108 buckets](docs/paso-08-pruning.md)
 - [Paso 9 — Looker Studio + vistas gold](docs/paso-09-looker.md)
+- [Paso 11 — Overview pulido (Looker)](docs/paso-11-overview-pulido.md)
 - [Guía Looker Studio (`looker/README.md`)](looker/README.md)
 - [One-page portafolio (`site/index.html`)](site/index.html)
 
