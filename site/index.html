@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KORA Deportes · Un dashboard para decidir dónde se rompe la última milla</title>
+<style>
+:root {
+  --bg: #F4F6FA;
+  --navy: #0B2545;
+  --navy-2: #163A63;
+  --navy-3: #0F2F55;
+  --orange: #F28C28;
+  --green: #2BB673;
+  --green-text: #1C8A56;
+  --green-bg: #E7F7EF;
+  --red: #E5484D;
+  --red-text: #C5373B;
+  --red-bg: #FDECEC;
+  --amber: #D97706;
+  --amber-bg: #FFF4E5;
+  --text: #1F2937;
+  --muted: #6B7280;
+  --line: #E6E9F0;
+  --track: #E8ECF2;
+  --white: #FFFFFF;
+  --radius: 12px;
+  --gutter: 24px;
+  --shadow: 0 1px 2px rgba(11, 37, 69, 0.04), 0 8px 24px rgba(11, 37, 69, 0.06);
+  --shadow-lg: 0 4px 8px rgba(11, 37, 69, 0.06), 0 24px 48px rgba(11, 37, 69, 0.12);
+  --max: 1160px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: Roboto, Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  font-feature-settings: "tnum" 1;
+}
+img { display: block; max-width: 100%; }
+a { color: inherit; }
+.wrap {
+  width: min(var(--max), calc(100% - 48px));
+  margin: 0 auto;
+}
+code, .mono {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1px 5px;
+  color: var(--navy);
+  white-space: nowrap;
+}
+
+/* ---------- Hero ---------- */
+.hero {
+  background:
+    radial-gradient(800px 360px at 50% -20%, rgba(242, 140, 40, 0.20), transparent 62%),
+    linear-gradient(180deg, var(--navy) 0%, var(--navy-3) 100%);
+  color: #fff;
+  padding: 44px 0 72px;
+  text-align: center;
+  position: relative;
+}
+.hero::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 4px;
+  background: var(--orange);
+}
+.brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+.mark {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  background: var(--orange);
+  color: var(--navy);
+  font-weight: 800;
+  font-size: 15px;
+  letter-spacing: -0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.brand-name {
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.72);
+}
+.hero h1 {
+  font-size: 40px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  max-width: 18ch;
+  margin: 0 auto 14px;
+}
+.hero .lede {
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: rgba(255,255,255,0.82);
+  max-width: 38em;
+  margin: 0 auto 28px;
+}
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--orange);
+  color: var(--navy);
+  height: 52px;
+  padding: 0 26px;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(242, 140, 40, 0.28);
+}
+.btn-ghost {
+  background: rgba(255,255,255,0.08);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.28);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: rgba(255,255,255,0.88);
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--orange);
+  flex: 0 0 auto;
+}
+
+/* ---------- Featured dashboard ---------- */
+.feature {
+  margin-top: -52px;
+  padding: 0 0 8px;
+  position: relative;
+  z-index: 2;
+}
+.browser {
+  background: var(--white);
+  border-radius: 14px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(11, 37, 69, 0.08);
+  overflow: hidden;
+}
+.chrome {
+  height: 44px;
+  background: #EEF2F7;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px;
+}
+.dots { display: flex; gap: 6px; flex: 0 0 auto; }
+.dots i {
+  width: 10px; height: 10px; border-radius: 50%; display: block;
+  background: #D1D5DB;
+}
+.dots i:nth-child(1) { background: #E5484D; }
+.dots i:nth-child(2) { background: #F28C28; }
+.dots i:nth-child(3) { background: #2BB673; }
+.urlbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  gap: 8px;
+  overflow: hidden;
+}
+.urlbar span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.urlbar b { color: var(--navy); font-weight: 650; }
+.browser-body {
+  background: #DDE3EC;
+  overflow: hidden;
+}
+.browser-body img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gutter);
+  margin-top: 20px;
+}
+.kpi {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 18px 20px 16px;
+  min-width: 0;
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1.3;
+}
+.kpi-value {
+  font-size: 32px;
+  font-weight: 750;
+  letter-spacing: -0.03em;
+  color: var(--navy);
+  margin-top: 6px;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value.amber { color: var(--amber); }
+.kpi-value.red { color: var(--red-text); }
+.kpi-hint {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+  line-height: 1.35;
+}
+.kpi-hint strong { color: var(--amber); font-weight: 650; }
+
+/* ---------- Sections ---------- */
+section.block { margin: 64px auto 0; }
+section.block.tight { margin-top: 48px; }
+.sec-kicker {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 8px;
+}
+.sec-title {
+  font-size: 28px;
+  font-weight: 750;
+  letter-spacing: -0.025em;
+  color: var(--navy);
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+.sec-intro {
+  font-size: 16px;
+  color: var(--muted);
+  max-width: 46em;
+  margin-bottom: 28px;
+  line-height: 1.55;
+}
+.sec-title.sm { font-size: 20px; }
+.sec-intro.sm { font-size: 14px; margin-bottom: 16px; }
+
+/* ---------- Page stories ---------- */
+.pages { display: flex; flex-direction: column; gap: 28px; }
+.page-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: center;
+  background: var(--white);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 20px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+}
+.page-row:nth-child(even) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+.page-row:nth-child(even) .shot { order: 2; }
+.shot {
+  min-width: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #DDE3EC;
+  border: 1px solid var(--line);
+}
+.shot img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.story { min-width: 0; padding: 8px 8px 8px 4px; }
+.page-row:nth-child(even) .story { padding: 8px 4px 8px 8px; }
+.story .num {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 6px;
+}
+.story h3 {
+  font-size: 22px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--navy);
+  margin-bottom: 10px;
+  line-height: 1.2;
+}
+.q {
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--text);
+  line-height: 1.4;
+  margin-bottom: 12px;
+}
+.story p {
+  font-size: 14px;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+.evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.3;
+}
+.pill b {
+  font-size: 14px;
+  font-weight: 750;
+  color: var(--navy);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.pill.amber { background: var(--amber-bg); border-color: rgba(217,119,6,0.18); }
+.pill.amber b { color: var(--amber); }
+.pill.red { background: var(--red-bg); border-color: rgba(229,72,77,0.18); }
+.pill.red b { color: var(--red-text); }
+.pill.green { background: var(--green-bg); border-color: rgba(43,182,115,0.2); }
+.pill.green b { color: var(--green-text); }
+.decide {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--navy);
+  line-height: 1.4;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--line);
+  width: 100%;
+}
+.decide .arrow { color: var(--orange); font-weight: 800; flex: 0 0 auto; }
+.note-cal {
+  font-size: 12px;
+  color: var(--amber);
+  font-weight: 650;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+
+/* ---------- 3 clicks ---------- */
+.clicks {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  overflow: hidden;
+}
+.click {
+  padding: 20px 22px;
+  position: relative;
+  min-width: 0;
+}
+.click + .click { border-left: 1px solid var(--line); }
+.click .n {
+  width: 28px; height: 28px;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 750;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+.click h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.015em;
+  margin-bottom: 4px;
+}
+.click p { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+/* ---------- Trust (dense) ---------- */
+.trust {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.trust-card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 16px 16px 14px;
+  min-width: 0;
+}
+.trust-card h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.trust-card p {
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.trust-card .eq {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--navy);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.trust-card .eq code { white-space: normal; }
+
+/* ---------- Architecture one-line ---------- */
+.arch {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 16px 18px;
+}
+.flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+}
+.flow-step {
+  flex: 1 1 0;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  padding: 10px 12px;
+}
+.flow-step .layer {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--orange);
+  margin-bottom: 2px;
+}
+.flow-step h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+.flow-arrow {
+  flex: 0 0 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--navy);
+  opacity: 0.4;
+}
+.flow-arrow svg { width: 16px; height: 16px; }
+.arch-note {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+}
+
+/* ---------- Decisions + datamart compact ---------- */
+.combo {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+}
+.decs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.dec {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 14px 14px 12px;
+  min-width: 0;
+}
+.dec h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.dec p { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.mart {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  padding: 14px 16px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mart h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+}
+.mart p { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.mart .when {
+  margin-top: auto;
+  background: var(--amber-bg);
+  border: 1px solid rgba(217, 119, 6, 0.18);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}
+.mart .when b { color: var(--amber); font-weight: 700; display: block; margin-bottom: 2px; }
+
+/* ---------- Footer ---------- */
+footer {
+  background: var(--navy);
+  color: rgba(255,255,255,0.78);
+  padding: 40px 0 36px;
+  margin-top: 64px;
+}
+footer .wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  align-items: start;
+}
+.foot-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+}
+.foot-brand .mark { width: 28px; height: 28px; font-size: 13px; border-radius: 7px; }
+footer .disclaimer {
+  font-size: 13px;
+  line-height: 1.55;
+  max-width: 54em;
+}
+footer .author {
+  text-align: right;
+  font-size: 13px;
+  color: #fff;
+  white-space: nowrap;
+}
+footer .author a {
+  color: var(--orange);
+  text-decoration: none;
+  font-weight: 650;
+}
+footer .author .role {
+  display: block;
+  color: rgba(255,255,255,0.62);
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 960px) {
+  .hero h1 { font-size: 32px; max-width: 20ch; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .page-row,
+  .page-row:nth-child(even) {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 14px;
+  }
+  .page-row:nth-child(even) .shot { order: 0; }
+  .story, .page-row:nth-child(even) .story { padding: 4px 4px 6px; }
+  .trust, .clicks, .combo, .decs { grid-template-columns: 1fr; }
+  .click + .click { border-left: 0; border-top: 1px solid var(--line); }
+  .flow { flex-direction: column; gap: 0; }
+  .flow-arrow { flex: 0 0 18px; transform: rotate(90deg); }
+  footer .wrap { grid-template-columns: 1fr; }
+  footer .author { text-align: left; }
+}
+@media (max-width: 480px) {
+  .wrap { width: calc(100% - 32px); }
+  .hero { padding: 32px 0 48px; }
+  .hero h1 { font-size: 26px; max-width: none; }
+  .hero .lede { font-size: 15px; }
+  .cta-row { flex-direction: column; align-items: stretch; }
+  .btn, .btn-primary { width: 100%; }
+  .badge { align-self: center; }
+  .kpi { padding: 14px 14px 12px; }
+  .kpi-value { font-size: 26px; }
+  .kpi-grid { gap: 12px; }
+  .sec-title { font-size: 22px; }
+  section.block { margin-top: 48px; }
+  .story h3 { font-size: 20px; }
+  .chrome { padding: 0 10px; }
+  .urlbar { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- SECCIÓN: Hero -->
+<header class="hero">
+  <div class="wrap">
+    <div class="brand-row">
+      <div class="mark" aria-hidden="true">K</div>
+      <div class="brand-name">KORA Deportes</div>
+    </div>
+    <h1>Un dashboard para decidir dónde se rompe la última milla</h1>
+    <p class="lede">Cinco páginas en Data Studio para recuperar OTIF, acortar el cycle time y redistribuir stock, con números que se pueden auditar en una reunión de operaciones.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba">Abrir dashboard en vivo</a>
+      <a class="btn btn-ghost" href="https://github.com/JulioPradenas/kora-logistica-bq">Ver código</a>
+      <span class="badge"><span class="badge-dot"></span>Laboratorio con datos sintéticos</span>
+    </div>
+  </div>
+</header>
+
+<!-- SECCIÓN: Dashboard en vivo -->
+<div class="feature">
+  <div class="wrap">
+    <a class="browser" href="https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba" aria-label="Abrir el dashboard de KORA en Data Studio">
+      <div class="chrome">
+        <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="urlbar">
+          <span><b>datastudio.google.com</b> / reporting / 172aa667-fb63-4c36-84d4-4585c8ad89ba</span>
+        </div>
+      </div>
+      <div class="browser-body">
+        <img src="../looker/screenshots/01-overview.png" alt="Página Overview del dashboard KORA, con OTIF, entregas atrasadas y cycle time"/>
+      </div>
+    </a>
+    <div class="kpi-grid">
+      <article class="kpi">
+        <div class="kpi-label">OTIF</div>
+        <div class="kpi-value amber">58,06%</div>
+        <div class="kpi-hint">Frente a una meta de <strong>85%</strong></div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-label">Entregas atrasadas</div>
+        <div class="kpi-value red">10.718</div>
+        <div class="kpi-hint">Fuera de la ventana pactada</div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-label">Cycle time promedio</div>
+        <div class="kpi-value">51,6 h</div>
+        <div class="kpi-hint">Picking a entrega</div>
+      </article>
+      <article class="kpi">
+        <div class="kpi-label">Envíos despachados</div>
+        <div class="kpi-value">29.803</div>
+        <div class="kpi-hint">Población de v_entregas_drill</div>
+      </article>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- SECCIÓN: Qué responde cada página -->
+  <section class="block wrap" id="paginas">
+    <div class="sec-kicker">El reporte, página a página</div>
+    <h2 class="sec-title">Qué responde cada página</h2>
+    <p class="sec-intro">Cada vista está hecha para una decisión, no para decorar. La pregunta, la evidencia y la acción caben en la misma tarjeta.</p>
+
+    <div class="pages">
+      <article class="page-row">
+        <div class="shot"><img src="../looker/screenshots/01-overview.png" alt="Overview: OTIF, atrasos y cycle time"/></div>
+        <div class="story">
+          <div class="num">01 · Overview</div>
+          <h3>El pulso del servicio</h3>
+          <p class="q">¿A cuánto estamos del OTIF que queremos y dónde se acumulan los atrasos?</p>
+          <p>La portada resume el estado del servicio en un vistazo. Hoy el OTIF está lejos de la meta, con más de diez mil entregas fuera de ventana y un cycle time de más de dos días.</p>
+          <div class="evidence">
+            <span class="pill amber">OTIF <b>58,06%</b></span>
+            <span class="pill">Meta <b>85%</b></span>
+            <span class="pill red">Atrasadas <b>10.718</b></span>
+            <span class="pill">Cycle time <b>51,6 h</b></span>
+          </div>
+          <div class="decide"><span class="arrow">→</span> Priorizar dónde recuperar OTIF antes de mirar el detalle.</div>
+        </div>
+      </article>
+
+      <article class="page-row">
+        <div class="shot"><img src="../looker/screenshots/02-heatmap.png" alt="Heatmap de OTIF por bodega y semana"/></div>
+        <div class="story">
+          <div class="num">02 · Heatmap bodega × semana</div>
+          <h3>Dónde y cuándo se cae el OTIF</h3>
+          <p class="q">¿Qué bodega y qué semana se cae el OTIF?</p>
+          <p>El cruce de bodega y semana evita gestionar un promedio del mes. El mapa señala la celda que se deteriora, para que el foco de la semana siguiente sea operativo y concreto.</p>
+          <div class="decide"><span class="arrow">→</span> Foco operativo semanal: qué bodega atender primero.</div>
+        </div>
+      </article>
+
+      <article class="page-row">
+        <div class="shot"><img src="../looker/screenshots/03-funnel.png" alt="Funnel logístico de picking, despacho y entrega"/></div>
+        <div class="story">
+          <div class="num">03 · Funnel logístico</div>
+          <h3>Dónde se pierde el volumen</h3>
+          <p class="q">¿En qué etapa se cae el flujo entre picking, despacho y entrega?</p>
+          <p>Cada etapa se cuenta desde su propio hecho: picking no es un subconjunto de despacho. Los tres números muestran dónde se pierde volumen, no un embudo forzado.</p>
+          <div class="evidence">
+            <span class="pill">Picking <b>40.823</b></span>
+            <span class="pill">Despacho <b>29.803</b></span>
+            <span class="pill">Entrega <b>21.325</b></span>
+          </div>
+          <div class="decide"><span class="arrow">→</span> Intervenir la etapa donde se pierde el volumen.</div>
+        </div>
+      </article>
+
+      <article class="page-row">
+        <div class="shot"><img src="../looker/screenshots/04-drill.png" alt="Drill de envíos por comuna, SKU y transportista"/></div>
+        <div class="story">
+          <div class="num">04 · Drill comuna / SKU / transportista</div>
+          <h3>Quién es responsable del atraso</h3>
+          <p class="q">¿Qué comuna y qué transportista arrastran el % a tiempo?</p>
+          <p>El conteo de envíos usa <code>COUNT_DISTINCT(shipment_id)</code> para no inflar el número por el fan-out shipment × SKU. La fila que más pesa queda explícita, y el resto del tablero se mueve en una banda estrecha.</p>
+          <div class="evidence">
+            <span class="pill red">Santiago / 3PL Partner 10 <b>49,82%</b></span>
+            <span class="pill">Envíos <b>283</b></span>
+            <span class="pill">Otras filas <b>47,9–56,0%</b></span>
+          </div>
+          <div class="decide"><span class="arrow">→</span> Renegociar o reasignar transportista por comuna.</div>
+        </div>
+      </article>
+
+      <article class="page-row">
+        <div class="shot"><img src="../looker/screenshots/05-stock.png" alt="Página Stock salud: quiebres y sobrestock"/></div>
+        <div class="story">
+          <div class="num">05 · Stock salud</div>
+          <h3>Quiebres y exceso, bodega a bodega</h3>
+          <p class="q">¿Dónde falta producto y dónde sobra, para redistribuir entre bodegas?</p>
+          <p>La página cruza existencias con la demanda. El Overstock aparece con la etiqueta del reporte; el DOH promedio queda marcado para no leerlo como un dato de operación real.</p>
+          <div class="evidence">
+            <span class="pill red">Quiebres <b>627</b></span>
+            <span class="pill amber">Overstock <b>147.867</b></span>
+            <span class="pill">DOH promedio <b>722,67</b></span>
+          </div>
+          <p class="note-cal">A calibrar: datos sintéticos con stock alto.</p>
+          <div class="decide"><span class="arrow">→</span> Redistribuir stock entre bodegas.</div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- SECCIÓN: Cómo usarlo en 3 clics -->
+  <section class="block tight wrap" id="uso">
+    <div class="sec-kicker">Uso en la reunión</div>
+    <h2 class="sec-title sm">Cómo usarlo en 3 clics</h2>
+    <p class="sec-intro sm">De la portada al responsable, sin salir del reporte.</p>
+    <div class="clicks">
+      <article class="click">
+        <div class="n">1</div>
+        <h3>Filtrar período y bodega</h3>
+        <p>Acota la conversación al recorte que importa hoy, no al histórico completo.</p>
+      </article>
+      <article class="click">
+        <div class="n">2</div>
+        <h3>Ver OTIF y atrasos</h3>
+        <p>En Overview queda claro si hay que recuperar servicio y de qué magnitud es el atraso.</p>
+      </article>
+      <article class="click">
+        <div class="n">3</div>
+        <h3>Bajar al drill</h3>
+        <p>En comuna, SKU o transportista aparece el responsable para renegociar o reasignar.</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- SECCIÓN: Por qué confiar en los números -->
+  <section class="block tight wrap" id="confianza">
+    <div class="sec-kicker">Calidad y reglas</div>
+    <h2 class="sec-title sm">Por qué confiar en los números</h2>
+    <p class="sec-intro sm">Las métricas del dashboard usan la misma regla que el SQL. Si no, el reporte mentiría.</p>
+    <div class="trust">
+      <article class="trust-card">
+        <h3>OTIF no es un promedio de %</h3>
+        <p>Se agrega el conteo, no el porcentaje. Promediar <code>otif_pct</code> distorsiona el resultado.</p>
+        <div class="eq"><code>SUM(n_otif) / SUM(n_intentadas_cerradas)</code></div>
+      </article>
+      <article class="trust-card">
+        <h3>Envíos sin fan-out</h3>
+        <p>En el drill, el grano shipment × SKU inflaría el conteo si se usara un <code>COUNT</code> simple.</p>
+        <div class="eq"><code>COUNT_DISTINCT(shipment_id)</code></div>
+      </article>
+      <article class="trust-card">
+        <h3>Nada se pierde entre capas</h3>
+        <p>Toda fila de bronze queda explicada. La cuarentena tiene causa: 160 filas fuera del modelo curado.</p>
+        <div class="eq">bronze = silver + cuarentena + duplicados</div>
+      </article>
+      <article class="trust-card">
+        <h3>Menos bytes, misma respuesta</h3>
+        <p>Partition pruning en <code>f_stock_diario</code>: el filtro por partición lee 10,7% del scan completo.</p>
+        <div class="eq">178.560 / 1.667.520 bytes</div>
+      </article>
+    </div>
+  </section>
+
+  <!-- SECCIÓN: Arquitectura -->
+  <section class="block tight wrap" id="arquitectura">
+    <div class="sec-kicker">Pipeline</div>
+    <h2 class="sec-title sm">De un CSV estilo ERP al reporte</h2>
+    <div class="arch">
+      <div class="flow" role="list">
+        <div class="flow-step" role="listitem">
+          <div class="layer">Origen</div>
+          <h3>CSV estilo SAP B1 / WMS</h3>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="flow-step" role="listitem">
+          <div class="layer">Bronze</div>
+          <h3>bronze_kora · carga cruda</h3>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="flow-step" role="listitem">
+          <div class="layer">Silver</div>
+          <h3>silver_kora · 160 en cuarentena</h3>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="flow-step" role="listitem">
+          <div class="layer">Gold</div>
+          <h3>gold_kora · modelo estrella</h3>
+        </div>
+        <div class="flow-arrow" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </div>
+        <div class="flow-step" role="listitem">
+          <div class="layer">Consumo</div>
+          <h3>Data Studio · 5 páginas</h3>
+        </div>
+      </div>
+      <div class="arch-note">
+        <span>BigQuery <strong style="color:var(--navy)">southamerica-west1</strong></span>
+        <span>Partición por rango de enteros en <code>fecha_id</code></span>
+        <span>Un comando idempotente: <code>make run</code></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN: Decisiones y datamart -->
+  <section class="block tight wrap" id="modelo">
+    <div class="sec-kicker">Modelo</div>
+    <h2 class="sec-title sm">Decisiones que el dashboard tiene que respetar</h2>
+    <div class="combo">
+      <div class="decs">
+        <article class="dec">
+          <h3>Funnel derivado</h3>
+          <p>Picking no es un subconjunto de despacho. Cada etapa se cuenta desde su propio hecho, para no inventar una inclusión que el proceso no tiene.</p>
+        </article>
+        <article class="dec">
+          <h3>Comuna en el hecho</h3>
+          <p>La comuna viaja como dimensión degenerada en el hecho de entrega, junto al evento que se está midiendo.</p>
+        </article>
+        <article class="dec">
+          <h3>SKU vía puente</h3>
+          <p>El SKU se alcanza por <code>shipment_id</code>. En el drill se usa <code>COUNT_DISTINCT</code> para no inflar el conteo.</p>
+        </article>
+      </div>
+      <aside class="mart">
+        <h3>Un datamart único</h3>
+        <p>OTIF, cycle time y stock se preguntan sobre el mismo proceso, así que hoy conviven en una sola capa gold.</p>
+        <div class="when">
+          <b>Cuándo lo partiría</b>
+          El día en que un hecho deje de caber sin comprometer el grano o la gobernanza: por ejemplo, si stock exigiera una cadencia propia o si OTIF y cycle time pasaran a equipos con reglas distintas.
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<!-- SECCIÓN: Disclaimer -->
+<footer>
+  <div class="wrap">
+    <div>
+      <div class="foot-brand">
+        <div class="mark" aria-hidden="true">K</div>
+        KORA Deportes
+      </div>
+      <p class="disclaimer">Proyecto de portafolio con datos sintéticos (semilla 42, 18 meses). No hay conexión real a SAP ni a un WMS en producción, y no se atribuyen requisitos a ningún empleador. Laboratorio para mostrar un pipeline auditable, no un sistema en operación.</p>
+    </div>
+    <div class="author">
+      <span class="role">Autor</span>
+      Julio Pradenas<br/>
+      <a href="https://github.com/JulioPradenas">github.com/JulioPradenas</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

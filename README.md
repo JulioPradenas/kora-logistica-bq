@@ -21,6 +21,8 @@ CSV sintéticos (SAP-like) → Python (laptop) → BigQuery bronze → silver �
 - **Datasets:** `bronze_kora` · `silver_kora` · `gold_kora`
 - **Datamart:** uno solo (`dm_logistica_retail` conceptual) — WMS + last-mile
 - **Auth:** Application Default Credentials (`gcloud auth application-default login`)
+- **Dashboard (Looker Studio):** [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba)
+- **One-pager:** [`site/index.html`](site/index.html)
 
 Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no implementados en este lab.
 
@@ -36,8 +38,8 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Transforms silver + quarantine | ✅ — CTAS + `quarantine_rows` |
 | Gold datamart (`dm_logistica_retail`) | ✅ — star + vistas OTIF/cycle/stock |
 | Demo partition/cluster (bytes) | ✅ — 108 buckets; prune dry_run stage 7 |
-| Looker Studio (vistas gold + guía) | ✅ — heatmap/funnel/drill; publish manual |
-| One-page portafolio | ⏳ |
+| Looker Studio (vistas gold + guía) | ✅ — [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) |
+| One-page portafolio | ✅ — [`site/index.html`](site/index.html) |
 
 ## Setup rápido (Mac — un entrypoint)
 
@@ -75,6 +77,28 @@ Números reales de `make run` (Julio, ADC laptop; dry_run stage 7). **No inventa
 Detalle: [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) · [docs/paso-05-load-bronze.md](docs/paso-05-load-bronze.md) · [docs/paso-06-silver.md](docs/paso-06-silver.md) · [docs/paso-07-gold.md](docs/paso-07-gold.md) · [docs/paso-08-pruning.md](docs/paso-08-pruning.md).  
 CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/README.md).
 
+## Un datamart (y cuándo lo partiría)
+
+Hoy OTIF, cycle time y stock viven en **un** datamart (`dm_logistica_retail` en `gold_kora`): mismos owners, preguntas cruzadas bodega↔calle y mismo refresh batch.
+
+Lo partiría cuando ownership, grano, SLA de refresh o seguridad diverjan (p. ej. stock subhorario vs OTIF diario, o IAM distinto para costo de flete). Criterio completo: [levantamiento §8](docs/levantamiento-requerimientos.md#8-decisión-un-datamart-vs-varios) · [paso-07](docs/paso-07-gold.md).
+
+## Definition of Done
+
+| # | Ítem | Estado | Evidencia |
+|---|---|---|---|
+| 1 | Repo GitHub con esqueleto canónico | ✅ | este repo · [estructura](.) |
+| 2 | `docs/levantamiento-requerimientos.md` completo | ✅ | [docs/levantamiento-requerimientos.md](docs/levantamiento-requerimientos.md) |
+| 3 | Generador sintético ≥12 meses / ≥~30k fact rows | ✅ | [data/README.md](data/README.md) · `scripts/generate_synthetic.py` |
+| 4 | Datasets BQ `bronze_kora` / `silver_kora` / `gold_kora` en `kora-sports` | ✅ | [docs/paso-03-bigquery-setup.md](docs/paso-03-bigquery-setup.md) |
+| 5 | Gold DDL `PARTITION BY` + `CLUSTER BY` documentados | ✅ | [sql/ddl_gold.sql](sql/ddl_gold.sql) · [docs/paso-04-ddl.md](docs/paso-04-ddl.md) |
+| 6 | Python carga bronze y silver→gold vía ADC (sin key en git) | ✅ | [scripts/load_bronze.py](scripts/load_bronze.py) · [scripts/transform_silver.py](scripts/transform_silver.py) · [scripts/build_gold.py](scripts/build_gold.py) |
+| 7 | `sql/demo_partition_prune.sql` + Bytes processed | ✅ | [sql/demo_partition_prune.sql](sql/demo_partition_prune.sql) · [docs/paso-08-pruning.md](docs/paso-08-pruning.md) |
+| 8 | Looker Studio sobre gold; link en README | ✅ | [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) · [looker/README.md](looker/README.md) |
+| 9 | `site/index.html` one-page ES (hero=KORA) + disclaimer lab | ✅ | [site/index.html](site/index.html) |
+| 10 | README: ADC, orden de comandos, límites sandbox; Scheduler/CF narrados | ✅ | Setup rápido (arriba) · Disclaimer (abajo) |
+| 11 | Sección: por qué un datamart y cuándo partirlo | ✅ | [Un datamart](#un-datamart-y-cuándo-lo-partiría) · [levantamiento §8](docs/levantamiento-requerimientos.md#8-decisión-un-datamart-vs-varios) |
+
 ## Docs
 
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
@@ -87,8 +111,19 @@ CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/
 - [Paso 8 — partition prune + 108 buckets](docs/paso-08-pruning.md)
 - [Paso 9 — Looker Studio + vistas gold](docs/paso-09-looker.md)
 - [Guía Looker Studio (`looker/README.md`)](looker/README.md)
-- One-page portafolio: TBD
+- [One-page portafolio (`site/index.html`)](site/index.html)
+
+### GitHub Pages (opcional, manual)
+
+Para publicar el one-pager sin tocar el pipeline:
+
+1. Repo → **Settings** → **Pages**.
+2. Source: **Deploy from a branch**.
+3. Branch: `main` · folder: `/` (root del repo).
+4. Save. El one-pager queda en `…/site/` (p. ej. `https://juliopradenas.github.io/kora-logistica-bq/site/`).
+
+No activar Pages desde CI ni desde este lab: es un paso opcional en la cuenta de Julio.
 
 ## Disclaimer
 
-ELT operable en sandbox: datos sintéticos, carga Python desde laptop y transforms SQL hasta un gold que alimenta Looker Studio. Con presupuesto cloud, el mismo contrato de datos se engancha a Scheduler/Functions o Composer.
+ELT operable en sandbox: datos sintéticos, carga Python desde laptop y transforms SQL hasta un gold que alimenta Looker Studio. Con presupuesto cloud, el mismo contrato de datos se engancha a Scheduler/Functions o Composer. No hay conexión real a SAP/WMS ni requisitos atribuidos a un empleador.
