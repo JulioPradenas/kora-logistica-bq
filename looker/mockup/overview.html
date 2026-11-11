@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8"/>
+<title>KORA Deportes · OTIF y cycle time</title>
+<style>
+:root {
+  --bg: #F4F6FA;
+  --navy: #0B2545;
+  --navy-2: #163A63;
+  --orange: #F28C28;
+  --green: #2BB673;
+  --green-text: #1C8A56;
+  --red: #E5484D;
+  --red-text: #C5373B;
+  --amber: #D97706;
+  --amber-bg: #FFF4E5;
+  --red-bg: #FDECEC;
+  --green-bg: #E7F7EF;
+  --text: #1F2937;
+  --muted: #6B7280;
+  --line: #E6E9F0;
+  --track: #E8ECF2;
+  --white: #FFFFFF;
+  --radius: 12px;
+  --gutter: 24px;
+  --shadow: 0 1px 2px rgba(11, 37, 69, 0.04), 0 8px 24px rgba(11, 37, 69, 0.06);
+  --header-h: 64px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  width: 1440px;
+  height: 900px;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  font-feature-settings: "tnum" 1, "ss01" 1;
+}
+img, svg { display: block; }
+
+/* ---- Header ---- */
+.header {
+  height: var(--header-h);
+  background: var(--navy);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 20px;
+  box-shadow: inset 0 -2px 0 var(--orange);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--orange);
+  color: var(--navy);
+  font-weight: 750;
+  font-size: 15px;
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.wordmark {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.wordmark span { font-weight: 500; opacity: 0.82; }
+.vdiv {
+  width: 1px;
+  height: 22px;
+  background: rgba(255,255,255,0.18);
+  flex: 0 0 auto;
+}
+.page-title {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+.tabs {
+  display: flex;
+  align-items: stretch;
+  height: var(--header-h);
+  gap: 4px;
+  margin-left: 8px;
+  flex: 1 1 auto;
+}
+.tab {
+  color: rgba(255,255,255,0.58);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  white-space: nowrap;
+}
+.tab.active {
+  color: #fff;
+  font-weight: 600;
+}
+.tab.active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  height: 2px;
+  background: var(--orange);
+  border-radius: 2px 2px 0 0;
+}
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.pill {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.16);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  white-space: nowrap;
+}
+.pill svg { flex: 0 0 auto; opacity: 0.9; }
+
+/* ---- Page grid ---- */
+.page {
+  height: calc(900px - var(--header-h));
+  padding: 20px 24px 16px;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: 136px 284px 286px 22px;
+  gap: var(--gutter);
+}
+.page.drill {
+  grid-template-rows: 252px minmax(0, 1fr) 22px;
+}
+.card {
+  background: var(--white);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  border: 1px solid rgba(11, 37, 69, 0.05);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.span-3 { grid-column: span 3; }
+.span-4 { grid-column: span 4; }
+.span-8 { grid-column: span 8; }
+.span-12 { grid-column: span 12; }
+
+/* ---- KPI ---- */
+.kpi {
+  padding: 16px 18px 12px;
+  display: flex;
+  flex-direction: column;
+}
+.kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--muted);
+  line-height: 1;
+}
+.kpi-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.kpi-value {
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--navy);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value .unit {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-left: 1px;
+}
+.chip-meta {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--red-bg);
+  color: var(--red-text);
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.kpi-delta {
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  line-height: 1;
+}
+.delta-up, .delta-down {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.delta-good { color: var(--green-text); }
+.delta-bad { color: var(--red-text); }
+.kpi-spark { margin-top: auto; padding-top: 8px; }
+.spark { width: 100%; height: 32px; }
+
+/* ---- Card headers ---- */
+.card-body {
+  height: 100%;
+  padding: 16px 20px 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  flex: 0 0 auto;
+}
+.card-head h2 {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--navy);
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.card-head p {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 3px;
+  line-height: 1.3;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  padding-top: 2px;
+}
+.leg { display: inline-flex; align-items: center; gap: 6px; }
+.swatch-line {
+  width: 14px; height: 3px; border-radius: 2px; background: var(--navy);
+}
+.swatch-dash {
+  width: 14px; height: 0;
+  border-top: 2px dashed var(--orange);
+}
+.chart-wrap { flex: 0 0 214px; height: 214px; min-height: 0; position: relative; }
+.chart-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.chart-svg .axis {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 10.5px;
+  fill: var(--muted);
+}
+.chart-svg .target-lbl {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--orange);
+}
+.chart-svg .chip {
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 650;
+  fill: #fff;
+}
+
+/* ---- Funnel ---- */
+.funnel { display: flex; flex-direction: column; gap: 0; flex: 1 1 auto; justify-content: space-between; padding-top: 4px; }
+.funnel-stage { }
+.funnel-lab {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+}
+.funnel-name { font-size: 12.5px; font-weight: 650; color: var(--text); }
+.funnel-val { font-size: 13.5px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.bar-track {
+  height: 22px;
+  background: var(--track);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.bar-fill { height: 100%; border-radius: 6px; }
+.bar-navy { background: var(--navy); }
+.bar-mid { background: #1B4A78; }
+.bar-acc { background: var(--orange); }
+.conv {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  height: 28px;
+  margin: 2px 0 2px 8px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.conv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #FFF4E8;
+  color: #C56A10;
+  font-weight: 650;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Table ---- */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+table.data th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 8px 8px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+table.data th.num, table.data td.num { text-align: right; padding-right: 0; }
+table.data td {
+  padding: 6px 12px 6px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
+  vertical-align: middle;
+  height: 36px;
+}
+table.data tr:last-child td { border-bottom: 0; }
+.cell-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cell-bar .track {
+  flex: 1 1 auto;
+  height: 8px;
+  background: var(--track);
+  border-radius: 99px;
+  overflow: hidden;
+  min-width: 0;
+}
+.cell-bar .fill {
+  height: 100%;
+  background: var(--navy);
+  border-radius: 99px;
+}
+.cell-bar .n {
+  width: 36px;
+  text-align: right;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--navy);
+  flex: 0 0 auto;
+}
+.pct {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 58px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.pct.bad { background: var(--red-bg); color: var(--red-text); }
+.pct.mid { background: var(--amber-bg); color: var(--amber); }
+.pct.good { background: var(--green-bg); color: var(--green-text); }
+.semaforo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.semaforo i {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: 0;
+}
+.dot-red { background: var(--red); }
+.dot-amber { background: var(--amber); }
+.dot-green { background: var(--green); }
+
+/* ---- Drill category bars ---- */
+.cat-list { display: flex; flex-direction: column; justify-content: space-evenly; flex: 1 1 auto; min-height: 0; padding-top: 6px; }
+.cat { display: grid; grid-template-columns: 110px 1fr 70px 52px; align-items: center; gap: 12px; }
+.cat-name { font-size: 13px; font-weight: 650; color: var(--navy); letter-spacing: 0.04em; }
+.cat .track { height: 18px; background: var(--track); border-radius: 6px; overflow: hidden; }
+.cat .fill { height: 100%; border-radius: 6px; background: var(--navy); }
+.cat:nth-child(2) .fill { background: #163A63; }
+.cat:nth-child(3) .fill { background: #1E4E7A; }
+.cat:nth-child(4) .fill { background: var(--orange); }
+.cat-val { font-size: 14px; font-weight: 700; color: var(--navy); text-align: right; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.cat-share { font-size: 12px; font-weight: 600; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+
+/* ---- Footer ---- */
+.footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  padding: 0 2px;
+}
+
+/* drill table slightly roomier */
+.page.drill .table-card .card-body { padding: 22px 24px 18px; }
+.page.drill table.data td { height: 58px; padding-top: 12px; padding-bottom: 12px; font-size: 14px; }
+.page.drill .cell-bar .track { height: 10px; }
+.page.drill .pct { min-width: 64px; height: 26px; font-size: 13px; }
+.page.drill tr.total td {
+  border-bottom: 0;
+  border-top: 1.5px solid #D5DAE3;
+  font-weight: 650;
+  background: linear-gradient(180deg, #F8FAFC 0%, #fff 100%);
+}
+.page.drill tr.total .n { font-weight: 700; width: auto; }
+.page.drill .total-num { justify-content: flex-end; }
+.page.drill .cat-list { padding: 8px 8px 4px; gap: 0; }
+.page.drill .cat { grid-template-columns: 120px 1fr 78px 56px; height: 40px; }
+.page.drill .card-body { padding: 18px 22px 16px; }
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="brand">
+    <div class="mark">K</div>
+    <div class="wordmark">KORA <span>Deportes</span></div>
+  </div>
+  <div class="vdiv"></div>
+  <div class="page-title">OTIF y cycle time</div>
+  <nav class="tabs"><div class="tab active">Overview</div><div class="tab ">Heatmap</div><div class="tab ">Funnel</div><div class="tab ">Drill</div><div class="tab ">Stock</div></nav>
+  <div class="controls">
+    <div class="pill"><svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1.5" y="2.75" width="11" height="9.75" rx="2" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M1.5 5.5h11" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M4.25 1.5v2.2M9.75 1.5v2.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg> 01-04-2025 – 04-11-2026</div>
+    <div class="pill"><svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <path d="M1.75 6.2L7 2.5l5.25 3.7V12a.8.8 0 0 1-.8.8H2.55A.8.8 0 0 1 1.75 12V6.2z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+      <path d="M5.2 12.8V8.3h3.6v4.5" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg> Bodega: Todas</div>
+  </div>
+</header>
+<main class="page">
+
+  <section class="card kpi span-3">
+    <div class="kpi-label">OTIF</div>
+    <div class="kpi-row">
+      <div class="kpi-value">58,06<span class="unit">%</span></div>
+      <span class="chip-meta">Meta 85%</span>
+    </div>
+    <div class="kpi-delta">
+      <span class="delta-up delta-good"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 6.5L5 3.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> +1,8 pp</span>
+      <span>vs mes anterior (ejemplo)</span>
+    </div>
+    <div class="kpi-spark"><svg class="spark" viewBox="0 0 240 32" width="100%" height="32" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M 1.50,32 L 1.50,26.71 4.32,24.96 7.14,23.04 9.96,21.95 12.79,22.10 15.61,22.60 18.43,21.06 21.25,18.23 24.07,15.55 26.89,14.53 29.71,13.79 32.54,12.98 35.36,12.27 38.18,11.80 41.00,13.90 43.82,19.02 46.64,24.93 49.46,29.28 52.29,30.24 55.11,30.50 57.93,30.20 60.75,29.27 63.57,28.16 66.39,25.42 69.21,21.63 72.04,18.74 74.86,18.11 77.68,18.56 80.50,17.09 83.32,14.38 86.14,11.75 88.96,11.03 91.79,14.15 94.61,19.49 97.43,24.40 100.25,26.13 103.07,26.42 105.89,26.88 108.71,27.48 111.54,28.16 114.36,28.02 117.18,26.08 120.00,23.14 122.82,20.26 125.64,18.73 128.46,15.69 131.29,11.77 134.11,9.20 136.93,9.38 139.75,9.61 142.57,8.60 145.39,6.69 148.21,4.80 151.04,3.37 153.86,2.08 156.68,1.50 159.50,1.63 162.32,2.33 165.14,3.46 167.96,4.44 170.79,5.12 173.61,5.46 176.43,8.77 179.25,15.03 182.07,21.16 184.89,24.18 187.71,24.34 190.54,25.19 193.36,26.64 196.18,28.27 199.00,28.98 201.82,27.18 204.64,23.48 207.46,19.24 210.29,16.44 213.11,14.75 215.93,13.11 218.75,12.32 221.57,12.58 224.39,13.54 227.21,14.22 230.04,14.34 232.86,14.18 235.68,14.18 238.50,14.71 L 238.50,32 Z" fill="#0B2545" opacity="0.10"/>
+      <polyline points="1.50,26.71 4.32,24.96 7.14,23.04 9.96,21.95 12.79,22.10 15.61,22.60 18.43,21.06 21.25,18.23 24.07,15.55 26.89,14.53 29.71,13.79 32.54,12.98 35.36,12.27 38.18,11.80 41.00,13.90 43.82,19.02 46.64,24.93 49.46,29.28 52.29,30.24 55.11,30.50 57.93,30.20 60.75,29.27 63.57,28.16 66.39,25.42 69.21,21.63 72.04,18.74 74.86,18.11 77.68,18.56 80.50,17.09 83.32,14.38 86.14,11.75 88.96,11.03 91.79,14.15 94.61,19.49 97.43,24.40 100.25,26.13 103.07,26.42 105.89,26.88 108.71,27.48 111.54,28.16 114.36,28.02 117.18,26.08 120.00,23.14 122.82,20.26 125.64,18.73 128.46,15.69 131.29,11.77 134.11,9.20 136.93,9.38 139.75,9.61 142.57,8.60 145.39,6.69 148.21,4.80 151.04,3.37 153.86,2.08 156.68,1.50 159.50,1.63 162.32,2.33 165.14,3.46 167.96,4.44 170.79,5.12 173.61,5.46 176.43,8.77 179.25,15.03 182.07,21.16 184.89,24.18 187.71,24.34 190.54,25.19 193.36,26.64 196.18,28.27 199.00,28.98 201.82,27.18 204.64,23.48 207.46,19.24 210.29,16.44 213.11,14.75 215.93,13.11 218.75,12.32 221.57,12.58 224.39,13.54 227.21,14.22 230.04,14.34 232.86,14.18 235.68,14.18 238.50,14.71" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg></div>
+  </section>
+
+  <section class="card kpi span-3">
+    <div class="kpi-label">Entregas atrasadas</div>
+    <div class="kpi-row">
+      <div class="kpi-value">10.718</div>
+    </div>
+    <div class="kpi-delta">
+      <span class="delta-down delta-good"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5l3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> −312</span>
+      <span>vs mes anterior (ejemplo)</span>
+    </div>
+    <div class="kpi-spark"><svg class="spark" viewBox="0 0 240 32" width="100%" height="32" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M 1.50,32 L 1.50,5.29 4.32,7.04 7.14,8.96 9.96,10.05 12.79,9.90 15.61,9.40 18.43,10.94 21.25,13.77 24.07,16.45 26.89,17.47 29.71,18.21 32.54,19.02 35.36,19.73 38.18,20.20 41.00,18.10 43.82,12.98 46.64,7.07 49.46,2.72 52.29,1.76 55.11,1.50 57.93,1.80 60.75,2.73 63.57,3.84 66.39,6.58 69.21,10.37 72.04,13.26 74.86,13.89 77.68,13.44 80.50,14.91 83.32,17.62 86.14,20.25 88.96,20.97 91.79,17.85 94.61,12.51 97.43,7.60 100.25,5.87 103.07,5.58 105.89,5.12 108.71,4.52 111.54,3.84 114.36,3.98 117.18,5.92 120.00,8.86 122.82,11.74 125.64,13.27 128.46,16.31 131.29,20.23 134.11,22.80 136.93,22.62 139.75,22.39 142.57,23.40 145.39,25.31 148.21,27.20 151.04,28.63 153.86,29.92 156.68,30.50 159.50,30.37 162.32,29.67 165.14,28.54 167.96,27.56 170.79,26.88 173.61,26.54 176.43,23.23 179.25,16.97 182.07,10.84 184.89,7.82 187.71,7.66 190.54,6.81 193.36,5.36 196.18,3.73 199.00,3.02 201.82,4.82 204.64,8.52 207.46,12.76 210.29,15.56 213.11,17.25 215.93,18.89 218.75,19.68 221.57,19.42 224.39,18.46 227.21,17.78 230.04,17.66 232.86,17.82 235.68,17.82 238.50,17.29 L 238.50,32 Z" fill="#E5484D" opacity="0.10"/>
+      <polyline points="1.50,5.29 4.32,7.04 7.14,8.96 9.96,10.05 12.79,9.90 15.61,9.40 18.43,10.94 21.25,13.77 24.07,16.45 26.89,17.47 29.71,18.21 32.54,19.02 35.36,19.73 38.18,20.20 41.00,18.10 43.82,12.98 46.64,7.07 49.46,2.72 52.29,1.76 55.11,1.50 57.93,1.80 60.75,2.73 63.57,3.84 66.39,6.58 69.21,10.37 72.04,13.26 74.86,13.89 77.68,13.44 80.50,14.91 83.32,17.62 86.14,20.25 88.96,20.97 91.79,17.85 94.61,12.51 97.43,7.60 100.25,5.87 103.07,5.58 105.89,5.12 108.71,4.52 111.54,3.84 114.36,3.98 117.18,5.92 120.00,8.86 122.82,11.74 125.64,13.27 128.46,16.31 131.29,20.23 134.11,22.80 136.93,22.62 139.75,22.39 142.57,23.40 145.39,25.31 148.21,27.20 151.04,28.63 153.86,29.92 156.68,30.50 159.50,30.37 162.32,29.67 165.14,28.54 167.96,27.56 170.79,26.88 173.61,26.54 176.43,23.23 179.25,16.97 182.07,10.84 184.89,7.82 187.71,7.66 190.54,6.81 193.36,5.36 196.18,3.73 199.00,3.02 201.82,4.82 204.64,8.52 207.46,12.76 210.29,15.56 213.11,17.25 215.93,18.89 218.75,19.68 221.57,19.42 224.39,18.46 227.21,17.78 230.04,17.66 232.86,17.82 235.68,17.82 238.50,17.29" fill="none" stroke="#E5484D" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg></div>
+  </section>
+
+  <section class="card kpi span-3">
+    <div class="kpi-label">Cycle time pick→entrega</div>
+    <div class="kpi-row">
+      <div class="kpi-value">51,6<span class="unit"> h</span></div>
+    </div>
+    <div class="kpi-delta">
+      <span class="delta-down delta-good"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5l3-3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> −2,4 h</span>
+      <span>vs mes anterior (ejemplo)</span>
+    </div>
+    <div class="kpi-spark"><svg class="spark" viewBox="0 0 240 32" width="100%" height="32" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M 1.50,32 L 1.50,7.92 4.32,8.18 7.14,8.60 9.96,8.52 12.79,7.66 15.61,6.71 18.43,7.35 21.25,9.08 24.07,10.89 26.89,11.73 29.71,12.57 32.54,13.63 35.36,14.77 38.18,15.88 41.00,15.29 43.82,12.64 46.64,9.46 49.46,7.37 52.29,7.60 55.11,8.24 57.93,9.16 60.75,10.37 63.57,11.54 66.39,13.67 69.21,16.35 72.04,18.20 74.86,18.27 77.68,17.41 80.50,17.75 83.32,18.85 86.14,19.79 88.96,19.34 91.79,16.17 94.61,11.47 97.43,7.14 100.25,5.13 103.07,4.26 105.89,3.43 108.71,2.67 111.54,2.04 114.36,2.19 117.18,3.78 120.00,6.27 122.82,8.88 125.64,10.68 128.46,13.66 131.29,17.33 134.11,20.10 136.93,20.95 139.75,21.72 142.57,23.29 145.39,25.39 148.21,27.35 151.04,28.81 153.86,30.00 156.68,30.50 159.50,30.31 162.32,29.52 165.14,28.26 167.96,26.94 170.79,25.70 173.61,24.59 176.43,21.33 179.25,15.97 182.07,10.70 184.89,7.66 187.71,6.71 190.54,5.38 193.36,3.79 196.18,2.23 199.00,1.50 201.82,2.73 204.64,5.49 207.46,8.81 210.29,11.30 213.11,13.16 215.93,15.10 218.75,16.55 221.57,17.32 224.39,17.62 227.21,18.10 230.04,18.91 232.86,19.83 235.68,20.51 238.50,20.68 L 238.50,32 Z" fill="#0B2545" opacity="0.10"/>
+      <polyline points="1.50,7.92 4.32,8.18 7.14,8.60 9.96,8.52 12.79,7.66 15.61,6.71 18.43,7.35 21.25,9.08 24.07,10.89 26.89,11.73 29.71,12.57 32.54,13.63 35.36,14.77 38.18,15.88 41.00,15.29 43.82,12.64 46.64,9.46 49.46,7.37 52.29,7.60 55.11,8.24 57.93,9.16 60.75,10.37 63.57,11.54 66.39,13.67 69.21,16.35 72.04,18.20 74.86,18.27 77.68,17.41 80.50,17.75 83.32,18.85 86.14,19.79 88.96,19.34 91.79,16.17 94.61,11.47 97.43,7.14 100.25,5.13 103.07,4.26 105.89,3.43 108.71,2.67 111.54,2.04 114.36,2.19 117.18,3.78 120.00,6.27 122.82,8.88 125.64,10.68 128.46,13.66 131.29,17.33 134.11,20.10 136.93,20.95 139.75,21.72 142.57,23.29 145.39,25.39 148.21,27.35 151.04,28.81 153.86,30.00 156.68,30.50 159.50,30.31 162.32,29.52 165.14,28.26 167.96,26.94 170.79,25.70 173.61,24.59 176.43,21.33 179.25,15.97 182.07,10.70 184.89,7.66 187.71,6.71 190.54,5.38 193.36,3.79 196.18,2.23 199.00,1.50 201.82,2.73 204.64,5.49 207.46,8.81 210.29,11.30 213.11,13.16 215.93,15.10 218.75,16.55 221.57,17.32 224.39,17.62 227.21,18.10 230.04,18.91 232.86,19.83 235.68,20.51 238.50,20.68" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg></div>
+  </section>
+
+  <section class="card kpi span-3">
+    <div class="kpi-label">Envíos despachados</div>
+    <div class="kpi-row">
+      <div class="kpi-value">29.803</div>
+    </div>
+    <div class="kpi-delta">
+      <span class="delta-up delta-good"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 6.5L5 3.5l3 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg> +1.240</span>
+      <span>vs mes anterior (ejemplo)</span>
+    </div>
+    <div class="kpi-spark"><svg class="spark" viewBox="0 0 240 32" width="100%" height="32" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M 1.50,32 L 1.50,30.50 4.32,29.36 7.14,28.24 9.96,27.17 12.79,26.17 15.61,25.25 18.43,24.44 21.25,23.76 24.07,23.20 26.89,22.79 29.71,22.51 32.54,22.38 35.36,22.39 38.18,22.53 41.00,22.78 43.82,23.14 46.64,23.59 49.46,24.10 52.29,24.65 55.11,25.23 57.93,25.80 60.75,26.34 63.57,26.84 66.39,27.26 69.21,27.59 72.04,27.81 74.86,27.91 77.68,27.88 80.50,27.70 83.32,27.39 86.14,26.93 88.96,26.33 91.79,25.61 94.61,24.77 97.43,23.82 100.25,22.80 103.07,21.71 105.89,20.58 108.71,19.44 111.54,18.30 114.36,17.19 117.18,16.14 120.00,15.16 122.82,14.28 125.64,13.51 128.46,12.86 131.29,12.34 134.11,11.97 136.93,11.74 139.75,11.65 142.57,11.70 145.39,11.87 148.21,12.16 151.04,12.55 153.86,13.02 156.68,13.55 159.50,14.11 162.32,14.68 165.14,15.25 167.96,15.78 170.79,16.25 173.61,16.65 176.43,16.95 179.25,17.14 182.07,17.20 184.89,17.12 187.71,16.91 190.54,16.55 193.36,16.05 196.18,15.41 199.00,14.65 201.82,13.77 204.64,12.81 207.46,11.76 210.29,10.66 213.11,9.52 215.93,8.38 218.75,7.25 221.57,6.15 224.39,5.12 227.21,4.17 230.04,3.32 232.86,2.58 235.68,1.97 238.50,1.50 L 238.50,32 Z" fill="#0B2545" opacity="0.10"/>
+      <polyline points="1.50,30.50 4.32,29.36 7.14,28.24 9.96,27.17 12.79,26.17 15.61,25.25 18.43,24.44 21.25,23.76 24.07,23.20 26.89,22.79 29.71,22.51 32.54,22.38 35.36,22.39 38.18,22.53 41.00,22.78 43.82,23.14 46.64,23.59 49.46,24.10 52.29,24.65 55.11,25.23 57.93,25.80 60.75,26.34 63.57,26.84 66.39,27.26 69.21,27.59 72.04,27.81 74.86,27.91 77.68,27.88 80.50,27.70 83.32,27.39 86.14,26.93 88.96,26.33 91.79,25.61 94.61,24.77 97.43,23.82 100.25,22.80 103.07,21.71 105.89,20.58 108.71,19.44 111.54,18.30 114.36,17.19 117.18,16.14 120.00,15.16 122.82,14.28 125.64,13.51 128.46,12.86 131.29,12.34 134.11,11.97 136.93,11.74 139.75,11.65 142.57,11.70 145.39,11.87 148.21,12.16 151.04,12.55 153.86,13.02 156.68,13.55 159.50,14.11 162.32,14.68 165.14,15.25 167.96,15.78 170.79,16.25 173.61,16.65 176.43,16.95 179.25,17.14 182.07,17.20 184.89,17.12 187.71,16.91 190.54,16.55 193.36,16.05 196.18,15.41 199.00,14.65 201.82,13.77 204.64,12.81 207.46,11.76 210.29,10.66 213.11,9.52 215.93,8.38 218.75,7.25 221.57,6.15 224.39,5.12 227.21,4.17 230.04,3.32 232.86,2.58 235.68,1.97 238.50,1.50" fill="none" stroke="#0B2545" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg></div>
+  </section>
+
+  <section class="card span-8">
+    <div class="card-body">
+      <div class="card-head">
+        <div>
+          <h2>OTIF semanal</h2>
+          <p>% de envíos entregados a tiempo · abr 2025 – nov 2026</p>
+        </div>
+        <div class="legend">
+          <span class="leg"><i class="swatch-line"></i> OTIF</span>
+          <span class="leg"><i class="swatch-dash"></i> Meta 85%</span>
+        </div>
+      </div>
+      <div class="chart-wrap">
+        <svg class="chart-svg" viewBox="0 0 880 214" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+      <defs>
+        <linearGradient id="otifFill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0B2545" stop-opacity="0.22"/>
+          <stop offset="100%" stop-color="#0B2545" stop-opacity="0.03"/>
+        </linearGradient>
+      </defs>
+      <line x1="40" y1="188.00" x2="864" y2="188.00" stroke="#D5DAE3" stroke-width="1"/><text x="32" y="188.00" text-anchor="end" dominant-baseline="middle" class="axis">0%</text><line x1="40" y1="144.00" x2="864" y2="144.00" stroke="#E5E8EF" stroke-width="1"/><text x="32" y="144.00" text-anchor="end" dominant-baseline="middle" class="axis">25%</text><line x1="40" y1="100.00" x2="864" y2="100.00" stroke="#E5E8EF" stroke-width="1"/><text x="32" y="100.00" text-anchor="end" dominant-baseline="middle" class="axis">50%</text><line x1="40" y1="56.00" x2="864" y2="56.00" stroke="#E5E8EF" stroke-width="1"/><text x="32" y="56.00" text-anchor="end" dominant-baseline="middle" class="axis">75%</text><line x1="40" y1="12.00" x2="864" y2="12.00" stroke="#E5E8EF" stroke-width="1"/><text x="32" y="12.00" text-anchor="end" dominant-baseline="middle" class="axis">100%</text>
+      
+      <rect x="40" y="12.00" width="824" height="26.40" fill="#F28C28" opacity="0.07"/>
+      <line x1="40" y1="38.40" x2="864" y2="38.40"
+            stroke="#F28C28" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <text x="864" y="32.40" text-anchor="end" class="target-lbl">Meta 85%</text>
+    
+      <path d="M 40.00,188.00 L 40.00,105.63 L 49.91,101.83 L 59.82,97.65 L 69.73,95.28 L 79.64,95.61 L 89.55,96.69 L 99.46,93.34 L 109.37,87.19 L 119.29,81.38 L 129.20,79.16 L 139.11,77.53 L 149.02,75.78 L 158.93,74.24 L 168.84,73.21 L 178.75,77.77 L 188.66,88.91 L 198.57,101.75 L 208.48,111.20 L 218.39,113.31 L 228.30,113.87 L 238.21,113.21 L 248.12,111.19 L 258.03,108.79 L 267.95,102.82 L 277.86,94.58 L 287.77,88.29 L 297.68,86.92 L 307.59,87.92 L 317.50,84.72 L 327.41,78.82 L 337.32,73.11 L 347.23,71.54 L 357.14,78.33 L 367.05,89.94 L 376.96,100.59 L 386.87,104.38 L 396.78,104.99 L 406.69,105.99 L 416.60,107.29 L 426.52,108.77 L 436.43,108.47 L 446.34,104.25 L 456.25,97.86 L 466.16,91.60 L 476.07,88.29 L 485.98,81.66 L 495.89,73.15 L 505.80,67.55 L 515.71,67.95 L 525.62,68.45 L 535.53,66.26 L 545.44,62.10 L 555.35,57.99 L 565.26,54.88 L 575.18,52.09 L 585.09,50.82 L 595.00,51.10 L 604.91,52.63 L 614.82,55.08 L 624.73,57.21 L 634.64,58.69 L 644.55,59.43 L 654.46,66.63 L 664.37,80.23 L 674.28,93.55 L 684.19,100.12 L 694.10,100.47 L 704.01,102.33 L 713.92,105.47 L 723.84,109.01 L 733.75,110.57 L 743.66,106.65 L 753.57,98.60 L 763.48,89.39 L 773.39,83.29 L 783.30,79.62 L 793.21,76.06 L 803.12,74.34 L 813.03,74.90 L 822.94,77.00 L 832.85,78.47 L 842.76,78.73 L 852.67,78.39 L 862.58,78.39 L 864.00,79.53 L 864.00,188.00 Z" fill="url(#otifFill)"/>
+      <path d="M 40.00,105.63 L 49.91,101.83 L 59.82,97.65 L 69.73,95.28 L 79.64,95.61 L 89.55,96.69 L 99.46,93.34 L 109.37,87.19 L 119.29,81.38 L 129.20,79.16 L 139.11,77.53 L 149.02,75.78 L 158.93,74.24 L 168.84,73.21 L 178.75,77.77 L 188.66,88.91 L 198.57,101.75 L 208.48,111.20 L 218.39,113.31 L 228.30,113.87 L 238.21,113.21 L 248.12,111.19 L 258.03,108.79 L 267.95,102.82 L 277.86,94.58 L 287.77,88.29 L 297.68,86.92 L 307.59,87.92 L 317.50,84.72 L 327.41,78.82 L 337.32,73.11 L 347.23,71.54 L 357.14,78.33 L 367.05,89.94 L 376.96,100.59 L 386.87,104.38 L 396.78,104.99 L 406.69,105.99 L 416.60,107.29 L 426.52,108.77 L 436.43,108.47 L 446.34,104.25 L 456.25,97.86 L 466.16,91.60 L 476.07,88.29 L 485.98,81.66 L 495.89,73.15 L 505.80,67.55 L 515.71,67.95 L 525.62,68.45 L 535.53,66.26 L 545.44,62.10 L 555.35,57.99 L 565.26,54.88 L 575.18,52.09 L 585.09,50.82 L 595.00,51.10 L 604.91,52.63 L 614.82,55.08 L 624.73,57.21 L 634.64,58.69 L 644.55,59.43 L 654.46,66.63 L 664.37,80.23 L 674.28,93.55 L 684.19,100.12 L 694.10,100.47 L 704.01,102.33 L 713.92,105.47 L 723.84,109.01 L 733.75,110.57 L 743.66,106.65 L 753.57,98.60 L 763.48,89.39 L 773.39,83.29 L 783.30,79.62 L 793.21,76.06 L 803.12,74.34 L 813.03,74.90 L 822.94,77.00 L 832.85,78.47 L 842.76,78.73 L 852.67,78.39 L 862.58,78.39 L 864.00,79.53" fill="none" stroke="#0B2545" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round"/>
+      <line x1="40.00" y1="188" x2="40.00" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="40.00" y="208" text-anchor="middle" class="axis">Abr 25</text><line x1="168.84" y1="188" x2="168.84" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="168.84" y="208" text-anchor="middle" class="axis">Jul 25</text><line x1="299.09" y1="188" x2="299.09" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="299.09" y="208" text-anchor="middle" class="axis">Oct 25</text><line x1="429.35" y1="188" x2="429.35" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="429.35" y="208" text-anchor="middle" class="axis">Ene 26</text><line x1="556.77" y1="188" x2="556.77" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="556.77" y="208" text-anchor="middle" class="axis">Abr 26</text><line x1="685.61" y1="188" x2="685.61" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="685.61" y="208" text-anchor="middle" class="axis">Jul 26</text><line x1="815.86" y1="188" x2="815.86" y2="193" stroke="#9AA3B2" stroke-width="1"/><text x="815.86" y="208" text-anchor="middle" class="axis">Oct 26</text>
+      <circle cx="864.00" cy="79.53" r="4.2" fill="#0B2545" stroke="#fff" stroke-width="2"/>
+      <g>
+        <rect x="812.00" y="53.53" width="48" height="18" rx="4" fill="#0B2545"/>
+        <text x="836.00" y="66.03" text-anchor="middle" class="chip">61,6%</text>
+      </g>
+    </svg>
+      </div>
+    </div>
+  </section>
+
+  <section class="card span-4">
+    <div class="card-body">
+      <div class="card-head">
+        <div>
+          <h2>Funnel logístico</h2>
+          <p>Picking → despacho → entrega</p>
+        </div>
+      </div>
+      <div class="funnel">
+        <div class="funnel-stage">
+          <div class="funnel-lab"><span class="funnel-name">Picking</span><span class="funnel-val">40.823</span></div>
+          <div class="bar-track"><div class="bar-fill bar-navy" style="width:100%"></div></div>
+        </div>
+        <div class="conv"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2.5 5.5L5 8l2.5-2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="conv-pill">73,0%</span> conversión</div>
+        <div class="funnel-stage">
+          <div class="funnel-lab"><span class="funnel-name">Despacho</span><span class="funnel-val">29.803</span></div>
+          <div class="bar-track"><div class="bar-fill bar-mid" style="width:73.0%"></div></div>
+        </div>
+        <div class="conv"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2v6M2.5 5.5L5 8l2.5-2.5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg> <span class="conv-pill">71,6%</span> conversión</div>
+        <div class="funnel-stage">
+          <div class="funnel-lab"><span class="funnel-name">Entrega</span><span class="funnel-val">21.325</span></div>
+          <div class="bar-track"><div class="bar-fill bar-acc" style="width:52.2%"></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card span-12">
+    <div class="card-body">
+      <div class="card-head">
+        <div>
+          <h2>Top comuna × transportista</h2>
+          <p>Envíos despachados y % a tiempo</p>
+        </div>
+        <div class="semaforo">
+  <span><i class="dot-red"></i>&lt; 50%</span>
+  <span><i class="dot-amber"></i>50–55%</span>
+  <span><i class="dot-green"></i>&gt; 55%</span>
+</div>
+      </div>
+      <table class="data">
+        <thead>
+          <tr>
+            <th style="width:22%">Comuna</th>
+            <th style="width:24%">Transportista</th>
+            <th>Envíos</th>
+            <th class="num" style="width:14%">% a tiempo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+              <td>Santiago</td>
+              <td>3PL Partner 10</td>
+              <td>
+                <div class="cell-bar">
+                  <div class="track"><div class="fill" style="width:100.0%"></div></div>
+                  <div class="n">283</div>
+                </div>
+              </td>
+              <td class="num"><span class="pct bad">49,8%</span></td>
+            </tr>
+<tr>
+              <td>Vitacura</td>
+              <td>3PL Partner 02</td>
+              <td>
+                <div class="cell-bar">
+                  <div class="track"><div class="fill" style="width:99.6%"></div></div>
+                  <div class="n">282</div>
+                </div>
+              </td>
+              <td class="num"><span class="pct mid">54,2%</span></td>
+            </tr>
+<tr>
+              <td>Lo Barnechea</td>
+              <td>3PL Partner 05</td>
+              <td>
+                <div class="cell-bar">
+                  <div class="track"><div class="fill" style="width:97.5%"></div></div>
+                  <div class="n">276</div>
+                </div>
+              </td>
+              <td class="num"><span class="pct good">56,0%</span></td>
+            </tr>
+<tr>
+              <td>Vitacura</td>
+              <td>3PL Partner 09</td>
+              <td>
+                <div class="cell-bar">
+                  <div class="track"><div class="fill" style="width:97.2%"></div></div>
+                  <div class="n">275</div>
+                </div>
+              </td>
+              <td class="num"><span class="pct mid">51,3%</span></td>
+            </tr>
+<tr>
+              <td>Santiago</td>
+              <td>3PL Partner 07</td>
+              <td>
+                <div class="cell-bar">
+                  <div class="track"><div class="fill" style="width:96.5%"></div></div>
+                  <div class="n">273</div>
+                </div>
+              </td>
+              <td class="num"><span class="pct bad">47,9%</span></td>
+            </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer class="footer">Datos sintéticos de laboratorio · gold_kora · BigQuery</footer>
+</main>
+</body>
+</html>
