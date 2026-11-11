@@ -77,6 +77,7 @@ CSV: `python scripts/generate_synthetic.py` (Paso 2); ver [data/README.md](data/
 
 ## Docs
 
+- [**Guía de estudio — entrevista BI**](docs/guia-estudio.md) (pitch, pasos 1–10, métricas, Q&A)
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
 - [Data contract (`data/README.md`)](data/README.md)
 - [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
