@@ -211,13 +211,34 @@ def test_views_contract_includes_paso09(build_gold):
 
 
 def test_looker_readme_and_paso09_doc_placeholders():
+    """Cierre Paso 9: viewer real + screenshots; sin PLACEHOLDER_*."""
     assert LOOKER_README.is_file()
     readme = LOOKER_README.read_text(encoding="utf-8")
     assert "kora-sports" in readme
     assert "gold_kora" in readme
-    assert "PLACEHOLDER" in readme or "placeholder" in readme.lower()
-    # No invented published viewer URL
-    assert "https://lookerstudio.google.com/reporting/" not in readme
+    assert "PLACEHOLDER_LOOKER_VIEWER_URL" not in readme
+    assert "PLACEHOLDER_SCREENSHOT_OVERVIEW" not in readme
+    assert "PLACEHOLDER_SCREENSHOT_HEATMAP" not in readme
+    assert "PLACEHOLDER_SCREENSHOT_FUNNEL" not in readme
+    assert "PLACEHOLDER_SCREENSHOT_DRILL" not in readme
+    viewer = (
+        "https://datastudio.google.com/reporting/"
+        "172aa667-fb63-4c36-84d4-4585c8ad89ba"
+    )
+    assert viewer in readme
+    for name in (
+        "01-overview.png",
+        "02-heatmap.png",
+        "03-funnel.png",
+        "04-drill.png",
+        "05-stock.png",
+    ):
+        assert name in readme
+        assert (ROOT / "looker" / "screenshots" / name).is_file()
+    assert "Stock salud" in readme
+    assert "Lecciones de construcción" in readme
+    assert "58,06%" in readme
+    assert "SUM(n_otif)/SUM(n_intentadas_cerradas)" in readme
     assert PASO09_DOC.is_file()
     doc = PASO09_DOC.read_text(encoding="utf-8")
     assert "v_heatmap_bodega_semana" in doc
