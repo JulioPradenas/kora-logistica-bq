@@ -197,12 +197,13 @@ Frase segura: *“Simulo el linaje SAP-like → CSV → BigQuery medallón; el g
 ### C) Rango de partición / `__UNPARTITIONED__` (Paso 8)
 `GENERATE_ARRAY` es **end exclusivo**. End `20261101` = 107 buckets; `fecha_id ≥ 20261101` → `__UNPARTITIONED__` (rompe prune). Fix: `20261201`, assert 0 filas UNPARTITIONED/NULL, recreate idempotente si cambia el spec.
 
-### D) Errores de métrica en dashboard (Paso 9)
+### D) Errores de métrica en dashboard (Paso 9 + Overview pulido)
 1. `AVG(otif_pct)` → ~0,58% vs **58,06%** ponderado.  
 2. `AVG(on_time)` en drill (grano shipment×SKU) ≠ % a tiempo.  
 3. Contar “envíos” desde `v_cycle_time` (**25.609**) en vez de drill/entregas (**29.803**).  
 4. Overrides de agregación por chart y cross-filters accidentales entre data sources.  
-**Lección:** la fórmula vive en el campo calculado / vista; revisar cada scorecard.
+5. **Dimensión de período ausente** — «Envíos despachados» no respondía al control de fecha porque el scorecard no tenía dimensión de período. Fix canvas: `fecha` de `v_entregas_drill` (mismo eje que OTIF / `fecha_id`, **no** `ship_fecha_id`) + `COUNT_DISTINCT(shipment_id)` por fan-out shipment×SKU; sin tocar SQL. Ver [`docs/paso-11-overview-pulido.md`](paso-11-overview-pulido.md).  
+**Lección:** la fórmula vive en el campo calculado / vista; revisar cada scorecard **y** su dimensión de período si debe filtrar con el control de fechas.
 
 ---
 
