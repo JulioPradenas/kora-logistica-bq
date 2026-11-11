@@ -7,17 +7,46 @@ Guía exacta para conectar el dashboard MVP al datamart gold.
 
 ---
 
-## Placeholders (rellenar tras publicar)
+## Informe publicado
 
 | Campo | Valor |
 |---|---|
-| **Viewer link (informe publicado)** | `PLACEHOLDER_LOOKER_VIEWER_URL` — pegar URL de Looker Studio cuando exista |
-| **Screenshot overview** | `PLACEHOLDER_SCREENSHOT_OVERVIEW` — p. ej. `looker/screenshots/01-overview.png` |
-| **Screenshot heatmap** | `PLACEHOLDER_SCREENSHOT_HEATMAP` — p. ej. `looker/screenshots/02-heatmap.png` |
-| **Screenshot funnel** | `PLACEHOLDER_SCREENSHOT_FUNNEL` — p. ej. `looker/screenshots/03-funnel.png` |
-| **Screenshot drill** | `PLACEHOLDER_SCREENSHOT_DRILL` — p. ej. `looker/screenshots/04-drill.png` |
+| **Viewer link (share-as-reader)** | [Abrir dashboard KORA](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) |
+| **Screenshot overview** | [`looker/screenshots/01-overview.png`](screenshots/01-overview.png) |
+| **Screenshot heatmap** | [`looker/screenshots/02-heatmap.png`](screenshots/02-heatmap.png) |
+| **Screenshot funnel** | [`looker/screenshots/03-funnel.png`](screenshots/03-funnel.png) |
+| **Screenshot drill** | [`looker/screenshots/04-drill.png`](screenshots/04-drill.png) |
+| **Screenshot stock salud** | [`looker/screenshots/05-stock.png`](screenshots/05-stock.png) |
 
-No inventar links. Si aún no hay informe publicado, dejar los `PLACEHOLDER_*`.
+### Capturas (Data Studio · 2026-11-10)
+
+![Overview OTIF + cycle](screenshots/01-overview.png)
+
+![Heatmap bodega × semana](screenshots/02-heatmap.png)
+
+![Funnel shipment_e2e](screenshots/03-funnel.png)
+
+![Drill comuna / SKU / transportista](screenshots/04-drill.png)
+
+![Stock salud](screenshots/05-stock.png)
+
+---
+
+## Valores observados (Data Studio · 2026-11-10)
+
+Números leídos del informe publicado (datos sintéticos seed 42). **No inventados.**
+
+| Página / métrica | Valor observado | Cómo se calculó en Looker |
+|---|---|---|
+| OTIF % | **58,06%** | Campo calculado `SUM(n_otif)/SUM(n_intentadas_cerradas)` — **nunca** `AVG(otif_pct)` |
+| Entregas atrasadas | **10.718** | `SUM(n_late)` sobre `v_otif_diario` |
+| Cycle time pick→entrega | **51,6 h** | `AVG(cycle_hours_pick_to_ata)` sobre `v_cycle_time` |
+| Funnel `shipment_e2e` | **40.823 / 29.803 / 21.325** | `n_shipments` por `stage_label` (picking → despacho → entrega) |
+| Drill % a tiempo | top Santiago / 3PL Partner 10 = **49,82%** | `COUNT_DISTINCT(CASE WHEN on_time THEN shipment_id END)/COUNT_DISTINCT(shipment_id)` — el grano shipment×SKU no permite `AVG(on_time)` |
+| Envíos por categoría | suman **29.803** | coherente con stage despacho del funnel |
+| Stockouts | **627** | `COUNT` / filtro `is_stockout` en `v_stock_salud` |
+| DOH 7d promedio | **722,67** | `AVG(doh_7d)` — artefacto de datos sintéticos (stock alto vs demanda); en prod habría que calibrar |
+| Overstock | **147.867** filas | heurística lab `is_overstock` (no SLA stakeholder) |
 
 ---
 
@@ -46,7 +75,7 @@ Post-check Paso 9: vistas existen, `rows > 0`, coherencia heatmap/funnel/drill.
 |---|---|---|
 | `KORA · OTIF diario` | `v_otif_diario` | Overview OTIF % / late |
 | `KORA · Cycle time` | `v_cycle_time` | Overview cycle E2E |
-| `KORA · Stock salud` | `v_stock_salud` | Página secundaria stock |
+| `KORA · Stock salud` | `v_stock_salud` | Página Stock salud |
 | `KORA · Heatmap bodega×semana` | `v_heatmap_bodega_semana` | Heatmap |
 | `KORA · Funnel logístico` | `v_funnel_logistico` | Funnel |
 | `KORA · Entregas drill` | `v_entregas_drill` | Drill comuna/SKU/carrier |
@@ -66,10 +95,10 @@ Crear informe en blanco → añadir las data sources de arriba.
 
 | Chart | Data source | Campos / filtro |
 |---|---|---|
-| Scorecard OTIF % | `v_otif_diario` | Métrica: `AVG(otif_pct)` o `SUM(n_otif)/SUM(n_intentadas_cerradas)` |
+| Scorecard OTIF % | `v_otif_diario` | **Obligatorio:** `SUM(n_otif)/SUM(n_intentadas_cerradas)` — no `AVG(otif_pct)` |
 | Scorecard late | `v_otif_diario` | `SUM(n_late)` |
 | Scorecard cycle h | `v_cycle_time` | `AVG(cycle_hours_pick_to_ata)` |
-| Time series OTIF | `v_otif_diario` | Dimensión `fecha`; métrica OTIF |
+| Time series OTIF | `v_otif_diario` | Dimensión `fecha`; misma fórmula OTIF |
 | Filtros | — | `bodega_id`, rango `fecha` / semana |
 
 ### Página B — Heatmap bodega × semana
@@ -93,20 +122,42 @@ Alternativa volume (no conversión E2E): mismo chart con `funnel_kind ∈ {movem
 | Chart | Data source | Dimensiones |
 |---|---|---|
 | Table / bar | `v_entregas_drill` | `comuna_name`, `sku_id`/`category`, `transportista_name` |
-| Métricas | | `COUNT(DISTINCT shipment_id)`, `AVG(on_time)`, `SUM(qty_delivered)` |
+| Métricas | | `COUNT(DISTINCT shipment_id)`; % a tiempo con `COUNT_DISTINCT(CASE WHEN on_time THEN shipment_id END)/COUNT_DISTINCT(shipment_id)`; `SUM(qty_delivered)` |
 
-### Página E — Stock (secundaria)
+> El bridge OUT WMS expande a grano **shipment×SKU**. `AVG(on_time)` o `AVG` de un BOOL distorsiona el % a tiempo.
 
-Usar `v_stock_salud`: `is_stockout`, `doh_7d`, `is_overstock` (heurística lab; no SLA stakeholder).
+### Página E — Stock salud
+
+Fuente: `v_stock_salud`. Heurística de laboratorio — **no** es SLA stakeholder.
+
+| Chart / scorecard | Campos |
+|---|---|
+| Stockouts | filtro / conteo `is_stockout` |
+| DOH 7d promedio | `AVG(doh_7d)` |
+| Overstock | filtro / conteo `is_overstock` |
+
+Captura: [`screenshots/05-stock.png`](screenshots/05-stock.png). El DOH alto (~723) es artefacto del sintético (stock vs demanda); en un caso real habría que calibrar umbrales y demanda.
 
 ---
 
 ## 3) Publicar / compartir (manual)
 
-1. **Share** → añadir viewers (cuenta Google).
-2. **File → Embed report** / link de viewer → copiar URL real.
-3. Pegar en `PLACEHOLDER_LOOKER_VIEWER_URL` (arriba) y en el briefing.
-4. Capturas → carpeta `looker/screenshots/` (opcional; gitignore si pesan) y actualizar placeholders.
+1. **Share** → añadir viewers (cuenta Google) o link share-as-reader.
+2. **File → Embed report** / link de viewer → URL real del informe.
+3. Capturas en `looker/screenshots/` (este repo ya incluye las del cierre Paso 9).
+
+Viewer actual: https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba
+
+---
+
+## Lecciones de construcción
+
+Trampas de métricas vistas al cablear el informe (útiles en entrevista):
+
+1. **Promediar ratios de grano fino** — `AVG(otif_pct)` sobre filas diarias/bodega entrega ~**0,58%** (o un ratio sin ponderar). El OTIF correcto es **ponderado**: `SUM(n_otif)/SUM(n_intentadas_cerradas)` → **58,06%**. Misma columna, semántica distinta.
+2. **Booleanos no se promedian** — `AVG(on_time)` en drill (grano shipment×SKU) no es % a tiempo. Usar `COUNT_DISTINCT` condicional / total de `shipment_id`.
+3. **Overrides de métrica a nivel chart** — Looker deja redefinir la agregación por gráfico; un scorecard “AVG” heredado del data source puede contradecir el campo calculado del informe. Revisar cada chart.
+4. **Cross-filters accidentales** — un filtro de página o un click en heatmap/funnel puede cruzar data sources y vaciar scorecards. Preferir filtros explícitos por control y desactivar “Filter interactions” donde no aporten.
 
 ---
 

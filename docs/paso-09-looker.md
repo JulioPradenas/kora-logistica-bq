@@ -12,7 +12,7 @@
 1. Verificar schemas reales silver/gold (comuna, etapas picking/despacho/entrega).
 2. Añadir vistas gold **11+**: heatmap, funnel, drill; reutilizar `v_otif_diario` / `v_cycle_time` / `v_stock_salud`.
 3. Extender `build_gold.py` (stage 6): dry-run de las nuevas vistas + post-checks (existe, rows>0, coherencia); idempotente.
-4. Guía exacta Looker Studio en `looker/README.md` (`kora-sports` / `gold_kora`) con placeholders de viewer/screenshots.
+4. Guía exacta Looker Studio en `looker/README.md` (`kora-sports` / `gold_kora`) con viewer publicado + screenshots.
 5. Pytest que falla en el código pre-Paso 9; CI verde sin credenciales GCP.
 
 **Fuera de alcance:** merge a `main` por el agente, credenciales GCP en CI/agente, inventar URL publicada de Looker, inventar columnas de etapa.
@@ -87,7 +87,7 @@ Filtro Looker recomendado: `funnel_kind = 'shipment_e2e'`.
 Guía paso a paso: [`looker/README.md`](../looker/README.md).
 
 - Data sources solo `kora-sports.gold_kora.*`
-- Placeholders: `PLACEHOLDER_LOOKER_VIEWER_URL`, screenshots — **no inventar link**
+- Viewer + screenshots en [`looker/README.md`](../looker/README.md) (cierre Paso 9; share-as-reader)
 
 ---
 
@@ -110,9 +110,9 @@ python scripts/build_gold.py
 - [x] Gaps documentados (sin columnas inventadas)
 - [x] Vistas 11–13 + reuso 08–10
 - [x] Post-checks vistas en `build_gold`
-- [x] `looker/README.md` con placeholders
+- [x] `looker/README.md` con viewer real + screenshots (overview/heatmap/funnel/drill/stock)
 - [x] pytest Paso 9; CI sin GCP
-- [ ] Julio publica informe Looker y reemplaza placeholders (manual laptop)
+- [x] Informe Looker publicado (share-as-reader) + valores observados documentados
 
 ---
 
