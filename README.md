@@ -101,6 +101,7 @@ Lo partiría cuando ownership, grano, SLA de refresh o seguridad diverjan (p. ej
 
 ## Docs
 
+- [**Guía de estudio — entrevista BI**](docs/guia-estudio.md) (pitch, pasos 1–10, métricas, Q&A)
 - [Levantamiento de requerimientos](docs/levantamiento-requerimientos.md)
 - [Data contract (`data/README.md`)](data/README.md)
 - [Paso 3 — setup BigQuery datasets](docs/paso-03-bigquery-setup.md)
