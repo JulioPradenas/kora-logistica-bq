@@ -5,6 +5,8 @@ Guía exacta para conectar el dashboard MVP al datamart gold.
 
 > Auth en la laptop de Julio (ADC). Este repo **no** guarda credenciales GCP ni publica el informe por el agente.
 
+**Estilo / polish del informe:** [`STYLE_GUIDE.md`](STYLE_GUIDE.md) — tokens, estado actual Overview, checklist Data Studio y mockups en [`mockup/`](mockup/) (referencia visual; no valores en vivo).
+
 ---
 
 ## Informe publicado
