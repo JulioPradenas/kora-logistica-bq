@@ -1,5 +1,7 @@
 # Guía de estilo Looker Studio — KORA Deportes
 
+> **Lab de portafolio. Marca con fines ilustrativos.**
+
 Objetivo: pulir el informe de Data Studio para que coincida con los mockups de [`looker/mockup/`](mockup/).
 
 > **Mockups = referencia visual.** Los archivos en `looker/mockup/` (PNG + HTML) **no** son valores del dashboard en vivo. En particular son **ilustrativos** (no datos reales del informe):
@@ -69,7 +71,7 @@ Usa **`v_entregas_drill`** con `COUNT_DISTINCT(shipment_id)` → **29.803**.
 ## 3. Checklist paso a paso
 
 Etiquetas de la UI de Data Studio en español. Abrir el informe en modo edición.  
-**(a)–(f) aplicados** en Overview (2026-11-11) — detalle y capturas: [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md). Resta **(g)** homologar header/cards en las demás páginas.
+**(a)–(f) aplicados** en Overview (2026-11-11) — detalle y capturas: [`docs/paso-11-overview-pulido.md`](../docs/paso-11-overview-pulido.md). **(g) aplicado** (2026-11-13): el header pasó a nivel de informe en las 5 páginas, con título «KORA Deportes», «Datos al» y controles Periodo y Bodega; cada página lleva su título y una línea «Para: …». Ver [`README.md`](README.md).
 
 ### (a) OTIF semanal
 

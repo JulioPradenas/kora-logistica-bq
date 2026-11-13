@@ -95,6 +95,7 @@ Construir un **datamart único de logística** en BigQuery (medallón bronze →
 - Zona horaria: `America/Santiago`.
 - “Día” de hechos = fecha de evento en Santiago (no UTC crudo en gold).
 - OTIF: solo estados canónicos `delivered` / `failed` / `returned`; excluir `in_transit` del denominador de OTIF cerrado del día.
+  - *Nota de evolución (implementación):* el export TM sintético usa los estados `delivered` / `late_delivered` / `failed` (no trae `returned`). Gold y el dashboard usan ese conjunto como denominador; ver [paso-07](paso-07-gold.md).
 - Pedidos cancelados antes de pick: fuera de lead time pick y de cycle time E2E.
 - Ajustes WMS negativos con motivo `CYCLE_COUNT` cuentan para auditoría, no para fill rate de pedido.
 
@@ -134,6 +135,8 @@ Detalle de columnas → Paso 2 (`data/README.md`). Aquí el acuerdo de **qué** 
 
 - `f_movimientos_bodega`: `PARTITION BY event_date` + `CLUSTER BY warehouse_id, sku_id`
 - `f_entregas`: `PARTITION BY delivery_date` + `CLUSTER BY warehouse_id, carrier_id`
+
+*Nota de evolución (Paso 4, PR #3):* en el sandbox de BigQuery cada partición por DATE expira 60 días después de su fecha y borraría la historia. Se implementó **integer-range** sobre `fecha_id` (`YYYYMMDD`, intervalo 100) más `CLUSTER BY`. Con billing se volvería a DATE. Ver [paso-04](paso-04-ddl.md) y [paso-08](paso-08-pruning.md).
 
 ---
 
