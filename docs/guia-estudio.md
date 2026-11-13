@@ -30,7 +30,9 @@ Si preguntan “¿es producción?”: *lab operable end-to-end con datos sintét
 | **7** | Gold datamart | SSoT star + KPIs | CTAS/vistas [`sql/gold/`](../sql/gold/); [`scripts/build_gold.py`](../scripts/build_gold.py); [docs/paso-07](paso-07-gold.md). Gold **583 / 8 / 250 / 12 / 55548 / 208440 / 29803** | [#6](https://github.com/JulioPradenas/kora-logistica-bq/pull/6) |
 | **8** | Partition prune + 108 buckets | Nov fuera de rango → `__UNPARTITIONED__`; demo bytes | End exclusivo `20261201`; [`sql/demo_partition_prune.sql`](../sql/demo_partition_prune.sql); [docs/paso-08](paso-08-pruning.md). Prune (b) = **10,7%** del baseline | [#7](https://github.com/JulioPradenas/kora-logistica-bq/pull/7) |
 | **9** | Looker + vistas | Dashboard solo sobre gold | Vistas 08–13; [`looker/README.md`](../looker/README.md); [docs/paso-09](paso-09-looker.md); [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba). Style guide [#10](https://github.com/JulioPradenas/kora-logistica-bq/pull/10) | [#8](https://github.com/JulioPradenas/kora-logistica-bq/pull/8) · cierre [#9](https://github.com/JulioPradenas/kora-logistica-bq/pull/9) |
-| **10** | One-pager + DoD | Portafolio público | `site/index.html` — **en curso** (PR abierto aparte; no mezclar con esta guía) | [#11](https://github.com/JulioPradenas/kora-logistica-bq/pull/11) (open) |
+| **10** | One-pager + DoD | Portafolio público | `site/index.html` + Definition of Done en el README | [#11](https://github.com/JulioPradenas/kora-logistica-bq/pull/11) |
+| **11** | Pulido Overview | Métricas ponderadas en Looker | [docs/paso-11](paso-11-overview-pulido.md) | [#13](https://github.com/JulioPradenas/kora-logistica-bq/pull/13) |
+| **12** | Cierre del dashboard | Las 5 páginas listas para mostrar | Header común con «Datos al», Heatmap con cruce picking vs. atraso, Funnel con conversiones, Drill por transportista, Stock en % y DOH ponderado; [looker/README.md](../looker/README.md) | este PR |
 
 **Entry point:** `make run` = datasets → DDL → generate CSV → load bronze → transform silver → build gold → demo prune (cada etapa dry-run → apply). Auth: `gcloud auth application-default login`.
 
@@ -176,7 +178,12 @@ Frase segura: *“Simulo el linaje SAP-like → CSV → BigQuery medallón; el g
 15. **¿Idempotencia?** `WRITE_TRUNCATE` + CTAS + regenerate seed 42 en cada `make run`.  
 16. **¿Incidente bronze REQUIRED?** Null anomalies rechazadas → DROP NOT NULL + schema nullable en load.  
 17. **¿Orphans ent_fecha?** Lag entrega Nov fuera de `d_fecha` → ampliar calendario a 2026-11-04 (583 días).  
-18. **¿Qué no está en el lab?** Conexión SAP real, Composer/Scheduler, claims Esparta, one-pager aún abierto en #11.
+18. **¿Qué no está en el lab?** Conexión SAP real, Composer/Scheduler, claims a empleadores reales.  
+19. **¿Por qué el Drill dice ~50% a tiempo y el OTIF 58,06%?** Poblaciones distintas: el Drill cuenta todos los envíos, incluidos los en tránsito; el OTIF solo entregas cerradas.  
+20. **¿Se pierden 11.020 envíos entre picking y despacho?** No necesariamente: hay salidas WMS con número de envío que no están en el export TM. Primero es un tema de integración entre sistemas.  
+21. **¿Un DOH de 508 días?** Stock sintético sobredimensionado frente a la demanda; DOH y sobrestock son heurísticas del lab. El promedio simple daba 722,67; el ponderado, 507,99.  
+22. **¿El 58,06% es OTIF completo?** Es la parte On Time. El In Full se calcula aparte porque el export TM no trae la cantidad pedida.  
+23. **¿Entonces de dónde viene el atraso?** Ni la bodega (picking parejo) ni un transportista puntual (12 en 48,56–51,03%). Un atraso parejo apunta a la promesa (ETA). En el lab, los datos no traen una diferencia sembrada.
 
 ---
 

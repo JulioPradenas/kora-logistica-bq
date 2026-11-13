@@ -725,7 +725,7 @@ footer .author .role {
       <article class="kpi">
         <div class="kpi-label">OTIF</div>
         <div class="kpi-value amber">58,06%</div>
-        <div class="kpi-hint">Frente a una meta de <strong>85%</strong></div>
+        <div class="kpi-hint">Parte On Time, frente a una meta demo de <strong>85%</strong></div>
       </article>
       <article class="kpi">
         <div class="kpi-label">Entregas atrasadas</div>
@@ -772,13 +772,17 @@ footer .author .role {
       </article>
 
       <article class="page-row">
-        <div class="shot"><img src="../looker/screenshots/02-heatmap.png" alt="Heatmap de OTIF por bodega y semana"/></div>
+        <div class="shot"><img src="../looker/screenshots/02-heatmap.png" alt="Heatmap de % de entregas atrasadas por bodega y semana, y gráfico de tiempo de picking contra % atrasadas por bodega"/></div>
         <div class="story">
           <div class="num">02 · Heatmap bodega × semana</div>
-          <h3>Dónde y cuándo se cae el OTIF</h3>
-          <p class="q">¿Qué bodega y qué semana se cae el OTIF?</p>
-          <p>El cruce de bodega y semana evita gestionar un promedio del mes. El mapa señala la celda que se deteriora, para que el foco de la semana siguiente sea operativo y concreto.</p>
-          <div class="decide"><span class="arrow">→</span> Foco operativo semanal: qué bodega atender primero.</div>
+          <h3>¿El atraso es de bodega o de calle?</h3>
+          <p class="q">¿Qué bodega y qué semana concentran el atraso, y lo explica el picking?</p>
+          <p>El mapa muestra el % de entregas atrasadas por bodega y semana (SUM/SUM, con total por bodega). Debajo, el tiempo de picking por bodega contra su % de atraso, cada uno en su eje. Las 8 bodegas pickean en un tiempo parecido y atrasan parecido: la bodega no explica el atraso.</p>
+          <div class="evidence">
+            <span class="pill">Peor bodega (31 ago–26 oct) <b>48,14%</b></span>
+            <span class="pill">Mejor <b>39,94%</b></span>
+          </div>
+          <div class="decide"><span class="arrow">→</span> Descartar la bodega como causa y mirar la calle.</div>
         </div>
       </article>
 
@@ -793,7 +797,10 @@ footer .author .role {
             <span class="pill">Picking <b>40.823</b></span>
             <span class="pill">Despacho <b>29.803</b></span>
             <span class="pill">Entrega <b>21.325</b></span>
+            <span class="pill">Conversiones <b>73,0% · 71,6%</b></span>
+            <span class="pill red">Fallidos <b>4.294</b></span>
           </div>
+          <p class="note-cal">Funnel global: la vista no trae fecha ni bodega, así que no responde a esos filtros.</p>
           <div class="decide"><span class="arrow">→</span> Intervenir la etapa donde se pierde el volumen.</div>
         </div>
       </article>
@@ -802,15 +809,15 @@ footer .author .role {
         <div class="shot"><img src="../looker/screenshots/04-drill.png" alt="Drill de envíos por comuna, SKU y transportista"/></div>
         <div class="story">
           <div class="num">04 · Drill comuna / SKU / transportista</div>
-          <h3>Quién es responsable del atraso</h3>
+          <h3>¿Lo explica un transportista?</h3>
           <p class="q">¿Qué comuna y qué transportista arrastran el % a tiempo?</p>
-          <p>El conteo de envíos usa <code>COUNT_DISTINCT(shipment_id)</code> para no inflar el número por el fan-out shipment × SKU. La fila que más pesa queda explícita, y el resto del tablero se mueve en una banda estrecha.</p>
+          <p>Los 12 transportistas quedan entre 48,56% y 51,03% a tiempo: con ~2.500 envíos cada uno, la diferencia está casi dentro del margen de error. Un atraso parejo en toda la red apunta a la promesa (ETA), no a un actor puntual. Este % cuenta todos los envíos, incluidos los en tránsito, por eso no es el OTIF de la portada. El conteo usa <code>COUNT_DISTINCT(shipment_id)</code> para no inflarlo por el fan-out shipment × SKU.</p>
           <div class="evidence">
+            <span class="pill">Transportistas <b>48,56–51,03%</b></span>
             <span class="pill red">Santiago / 3PL Partner 10 <b>49,82%</b></span>
             <span class="pill">Envíos <b>283</b></span>
-            <span class="pill">Otras filas <b>47,9–56,0%</b></span>
           </div>
-          <div class="decide"><span class="arrow">→</span> Renegociar o reasignar transportista por comuna.</div>
+          <div class="decide"><span class="arrow">→</span> Revisar la promesa antes de cambiar un 3PL.</div>
         </div>
       </article>
 
@@ -820,13 +827,13 @@ footer .author .role {
           <div class="num">05 · Stock salud</div>
           <h3>Quiebres y exceso, bodega a bodega</h3>
           <p class="q">¿Dónde falta producto y dónde sobra, para redistribuir entre bodegas?</p>
-          <p>La página cruza existencias con la demanda. El Overstock aparece con la etiqueta del reporte; el DOH promedio queda marcado para no leerlo como un dato de operación real.</p>
+          <p>La página cruza existencias con la demanda, en % de días-SKU para comparar bodegas. El DOH es ponderado (stock usable total / demanda diaria total): el promedio de DOH por SKU daba 722,67 porque los SKU de baja rotación lo inflaban.</p>
           <div class="evidence">
-            <span class="pill red">Quiebres <b>627</b></span>
-            <span class="pill amber">Overstock <b>147.867</b></span>
-            <span class="pill">DOH promedio <b>722,67</b></span>
+            <span class="pill red">Quiebre <b>0,30%</b></span>
+            <span class="pill amber">Sobrestock <b>70,94%</b></span>
+            <span class="pill">DOH ponderado <b>507,99 días</b></span>
           </div>
-          <p class="note-cal">A calibrar: datos sintéticos con stock alto.</p>
+          <p class="note-cal">Heurística del lab: el stock sintético está sobredimensionado frente a la demanda; el umbral de 45 días se calibraría con supply.</p>
           <div class="decide"><span class="arrow">→</span> Redistribuir stock entre bodegas.</div>
         </div>
       </article>

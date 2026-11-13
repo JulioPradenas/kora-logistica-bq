@@ -1,7 +1,7 @@
 # KORA Deportes — Logística (WMS + last mile) en BigQuery
 
-> **Lab de portafolio / migración demostrativa.** Marca ficticia con fines ilustrativos.  
-> No es un entregable de empleo ni un claim sobre una empresa real.
+> **Lab de portafolio. Marca con fines ilustrativos.**  
+> Migración demostrativa con datos sintéticos. No es un entregable de empleo ni un claim sobre una empresa real.
 
 Analista: [Julio Pradenas](https://github.com/JulioPradenas)
 
@@ -38,8 +38,24 @@ Cloud Scheduler / Cloud Functions / Composer: **solo narrados** en docs; no impl
 | Transforms silver + quarantine | ✅ — CTAS + `quarantine_rows` |
 | Gold datamart (`dm_logistica_retail`) | ✅ — star + vistas OTIF/cycle/stock |
 | Demo partition/cluster (bytes) | ✅ — 108 buckets; prune dry_run stage 7 |
-| Looker Studio (vistas gold + guía) | ✅ — [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) |
+| Looker Studio (vistas gold + guía) | ✅ — [viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) · 5 páginas cerradas el 2026-11-13 |
 | One-page portafolio | ✅ — [`site/index.html`](site/index.html) |
+
+## Dashboard (Looker Studio)
+
+[Abrir el viewer](https://datastudio.google.com/reporting/172aa667-fb63-4c36-84d4-4585c8ad89ba) · acceso con el link, sin cuenta de BigQuery (fuentes con credenciales del propietario).
+
+| Página | Para | Pregunta | Números clave (seed 42) |
+|---|---|---|---|
+| Overview | Gerencia de operaciones | ¿Cómo está el servicio? | OTIF (parte On Time) **58,06%** · atrasadas **10.718** · cycle **51,6 h** · despachados **29.803** |
+| Heatmap bodega × semana | Jefe de bodega | ¿El atraso es de bodega o de calle? | % atrasadas por bodega **39,94–48,14%** (31-ago → 26-oct); picking parejo entre bodegas |
+| Funnel logístico | Operaciones | ¿Dónde se pierde el volumen? | **40.823 / 29.803 / 21.325**; conversiones **73,0% · 71,6%** |
+| Drill comuna / SKU / transportista | Transporte | ¿Lo explica un 3PL? | 12 transportistas entre **48,56%** y **51,03%** a tiempo |
+| Stock salud | Jefe de bodega | ¿Dónde falta y dónde sobra? | quiebre **0,30%** · sobrestock **70,94%** · DOH ponderado **507,99** días (heurística lab) |
+
+Lectura: ni la bodega ni un transportista puntual explican el atraso; un atraso parejo en toda la red apunta a la promesa (ETA). En el lab, los datos sintéticos no traen una diferencia sembrada por bodega ni por transportista. Valores, fórmulas y lecciones: [`looker/README.md`](looker/README.md).
+
+**Mantenimiento:** el sandbox borra las tablas 60 días después de creadas. Antes de compartir el link después de esa fecha (aprox. 2027-01-09 para la corrida del 2026-11-10/11), correr `make run`.
 
 ## Setup rápido (Mac — un entrypoint)
 

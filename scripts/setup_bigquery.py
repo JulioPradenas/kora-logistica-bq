@@ -8,9 +8,9 @@ Uso (Mac / laptop de Julio, con ADC ya configurado):
   python scripts/setup_bigquery.py
   python scripts/setup_bigquery.py   # re-run: no falla ni duplica
 
-Auth: Application Default Credentials (ADC). Nunca hardcodea credenciales
-ni espera un JSON de service account en el repo. Opcional local (no CI):
-  export GOOGLE_APPLICATION_CREDENTIALS=/ruta/local/sa.json
+Auth: solo Application Default Credentials (ADC). Nunca hardcodea credenciales
+ni usa llaves JSON de service account:
+  gcloud auth application-default login
 
 Proyecto: leído de .env / entorno — GCP_PROJECT o GOOGLE_CLOUD_PROJECT.
 Nunca hardcodear el project id en llamadas de producción del script;
